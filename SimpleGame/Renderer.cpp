@@ -18,10 +18,14 @@ namespace
     const float CanvasWidth = 1440.0f;
     const float CanvasHeight = 900.0f;
     const float Pi = 3.14159265358979323846f;
+
     GLuint MakeShader(GLenum type, const char* source)
     {
         GLuint shader = glCreateShader(type);
-        if (!shader) return 0;
+        if (!shader)
+        {
+            return 0;
+        }
         glShaderSource(shader, 1, &source, nullptr);
         glCompileShader(shader);
         GLint compiled = GL_FALSE;
@@ -36,12 +40,15 @@ namespace
         }
         return shader;
     }
-}
+} // namespace
 
 Renderer::Renderer(int width, int height)
 {
     m_Program = CompileProgram();
-    if (!m_Program) return;
+    if (!m_Program)
+    {
+        return;
+    }
     glGenVertexArrays(1, &m_VertexArray);
     glGenBuffers(1, &m_VertexBuffer);
     glBindVertexArray(m_VertexArray);
@@ -50,10 +57,30 @@ Renderer::Renderer(int width, int height)
     glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
     glEnableVertexAttribArray(3);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, x)));
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, u)));
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, r)));
-    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, emission)));
+    glVertexAttribPointer(0,
+                          2,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, x)));
+    glVertexAttribPointer(1,
+                          2,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, u)));
+    glVertexAttribPointer(2,
+                          4,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, r)));
+    glVertexAttribPointer(3,
+                          1,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          reinterpret_cast<void*>(offsetof(Vertex, emission)));
     const unsigned char white[] = {255, 255, 255, 255};
     glGenTextures(1, &m_WhiteTexture);
     glBindTexture(GL_TEXTURE_2D, m_WhiteTexture);
@@ -69,7 +96,9 @@ Renderer::Renderer(int width, int height)
     m_Initialized = m_VertexArray != 0 && m_VertexBuffer != 0 && m_WhiteTexture != 0;
     m_PostProcess.reset(new PostProcess());
     if (!m_PostProcess->Initialize())
+    {
         std::cerr << "Post-processing is unavailable; using direct rendering." << std::endl;
+    }
     Resize(width, height);
 }
 
@@ -77,39 +106,84 @@ Renderer::~Renderer()
 {
     m_PostProcess.reset();
     ClearTextCache();
-    if (m_WhiteTexture) glDeleteTextures(1, &m_WhiteTexture);
-    if (m_VertexBuffer) glDeleteBuffers(1, &m_VertexBuffer);
-    if (m_VertexArray) glDeleteVertexArrays(1, &m_VertexArray);
-    if (m_Program) glDeleteProgram(m_Program);
+    if (m_WhiteTexture)
+    {
+        glDeleteTextures(1, &m_WhiteTexture);
+    }
+    if (m_VertexBuffer)
+    {
+        glDeleteBuffers(1, &m_VertexBuffer);
+    }
+    if (m_VertexArray)
+    {
+        glDeleteVertexArrays(1, &m_VertexArray);
+    }
+    if (m_Program)
+    {
+        glDeleteProgram(m_Program);
+    }
 }
 
 GLuint Renderer::CompileProgram()
 {
-    const char* vertexSource =
-        "#version 330 core\n"
-        "layout(location=0) in vec2 a_Position;\n"
-        "layout(location=1) in vec2 a_UV;\n"
-        "layout(location=2) in vec4 a_Color;\n"
-        "layout(location=3) in float a_Emission;\n"
-        "out vec2 v_UV; out vec4 v_Color; out float v_Emission;\n"
-        "void main(){ v_UV=a_UV; v_Color=a_Color; v_Emission=a_Emission;"
-        "gl_Position=vec4(a_Position.x/720.0-1.0,1.0-a_Position.y/450.0,0.0,1.0); }\n";
-    const char* fragmentSource =
-        "#version 330 core\n"
-        "in vec2 v_UV; in vec4 v_Color; in float v_Emission;\n"
-        "uniform sampler2D u_Texture;\n"
-        "uniform bool u_LinearScene;\n"
-        "out vec4 FragColor;\n"
-        "vec3 linearize(vec3 c){ return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),c)); }\n"
-        "void main(){ vec4 c=v_Color*texture(u_Texture,v_UV);"
-        "if(u_LinearScene) c.rgb=linearize(clamp(c.rgb,0.0,1.0))*(1.0+max(v_Emission,0.0));"
-        "FragColor=c; }\n";
+    const char* vertexSource = R"GLSL(#version 330 core
+layout(location = 0) in vec2 a_Position;
+layout(location = 1) in vec2 a_UV;
+layout(location = 2) in vec4 a_Color;
+layout(location = 3) in float a_Emission;
+
+out vec2 v_UV;
+out vec4 v_Color;
+out float v_Emission;
+
+void main()
+{
+    v_UV = a_UV;
+    v_Color = a_Color;
+    v_Emission = a_Emission;
+    gl_Position = vec4(a_Position.x / 720.0 - 1.0, 1.0 - a_Position.y / 450.0, 0.0, 1.0);
+}
+)GLSL";
+
+    const char* fragmentSource = R"GLSL(#version 330 core
+in vec2 v_UV;
+in vec4 v_Color;
+in float v_Emission;
+
+uniform sampler2D u_Texture;
+uniform bool u_LinearScene;
+
+out vec4 FragColor;
+
+vec3 linearize(vec3 c)
+{
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+void main()
+{
+    vec4 c = v_Color * texture(u_Texture, v_UV);
+
+    if (u_LinearScene)
+    {
+        c.rgb = linearize(clamp(c.rgb, 0.0, 1.0)) * (1.0 + max(v_Emission, 0.0));
+    }
+
+    FragColor = c;
+}
+)GLSL";
     GLuint vertex = MakeShader(GL_VERTEX_SHADER, vertexSource);
     GLuint fragment = MakeShader(GL_FRAGMENT_SHADER, fragmentSource);
     if (!vertex || !fragment)
     {
-        if (vertex) glDeleteShader(vertex);
-        if (fragment) glDeleteShader(fragment);
+        if (vertex)
+        {
+            glDeleteShader(vertex);
+        }
+        if (fragment)
+        {
+            glDeleteShader(fragment);
+        }
         return 0;
     }
     GLuint program = glCreateProgram();
@@ -146,13 +220,19 @@ void Renderer::Resize(int width, int height)
     m_ViewportHeight = std::max(1, static_cast<int>(std::round(CanvasHeight * scale)));
     m_ViewportX = (m_WindowWidth - m_ViewportWidth) / 2;
     m_ViewportY = (m_WindowHeight - m_ViewportHeight) / 2;
-    if (m_PostProcess) m_PostProcess->Resize(m_ViewportWidth, m_ViewportHeight);
+    if (m_PostProcess)
+    {
+        m_PostProcess->Resize(m_ViewportWidth, m_ViewportHeight);
+    }
     glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
 }
 
 void Renderer::BeginFrame(Color background)
 {
-    if (!m_Initialized) return;
+    if (!m_Initialized)
+    {
+        return;
+    }
     m_Vertices.clear();
     m_BatchTexture = m_WhiteTexture;
     m_InOverlay = false;
@@ -164,15 +244,24 @@ void Renderer::BeginFrame(Color background)
     glDisable(GL_CULL_FACE);
     glClearColor(background.r, background.g, background.b, background.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    if (m_PostProcess && m_PostProcess->BeginScene()) {
+    if (m_PostProcess && m_PostProcess->BeginScene())
+    {
         m_SceneOffscreen = true;
         // BeginScene selected the full offscreen viewport. Clear in linear space.
-        auto linearize = [](float c) { return c <= .04045f ? c / 12.92f : std::pow((c + .055f) / 1.055f, 2.4f); };
-        glClearColor(linearize(background.r), linearize(background.g), linearize(background.b), background.a);
+        auto linearize = [](float c)
+        {
+            return c <= .04045f ? c / 12.92f : std::pow((c + .055f) / 1.055f, 2.4f);
+        };
+        glClearColor(linearize(background.r),
+                     linearize(background.g),
+                     linearize(background.b),
+                     background.a);
         glClear(GL_COLOR_BUFFER_BIT);
     }
     else
+    {
         glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
+    }
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glUseProgram(m_Program);
@@ -183,10 +272,19 @@ void Renderer::BeginFrame(Color background)
 
 void Renderer::BeginOverlay()
 {
-    if (!m_Initialized || m_InOverlay) return;
+    if (!m_Initialized || m_InOverlay)
+    {
+        return;
+    }
     Flush();
     if (m_SceneOffscreen)
-        m_PostProcess->Composite(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight, m_PostSettings);
+    {
+        m_PostProcess->Composite(m_ViewportX,
+                                 m_ViewportY,
+                                 m_ViewportWidth,
+                                 m_ViewportHeight,
+                                 m_PostSettings);
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
     glDisable(GL_FRAMEBUFFER_SRGB);
@@ -202,7 +300,10 @@ void Renderer::BeginOverlay()
 
 void Renderer::EndFrame()
 {
-    if (!m_Initialized) return;
+    if (!m_Initialized)
+    {
+        return;
+    }
     BeginOverlay();
     Flush();
     glBindVertexArray(0);
@@ -211,10 +312,16 @@ void Renderer::EndFrame()
 
 void Renderer::Flush()
 {
-    if (m_Vertices.empty()) return;
+    if (m_Vertices.empty())
+    {
+        return;
+    }
     glBindTexture(GL_TEXTURE_2D, m_BatchTexture);
     glBindBuffer(GL_ARRAY_BUFFER, m_VertexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, m_Vertices.size() * sizeof(Vertex), m_Vertices.data(), GL_STREAM_DRAW);
+    glBufferData(GL_ARRAY_BUFFER,
+                 m_Vertices.size() * sizeof(Vertex),
+                 m_Vertices.data(),
+                 GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_Vertices.size()));
     m_Vertices.clear();
 }
@@ -237,15 +344,23 @@ void Renderer::Triangle(Vec2 a, Vec2 b, Vec2 c, Color color)
 
 void Renderer::Polygon(const std::vector<Vec2>& vertices, Color color)
 {
-    if (!m_Initialized || vertices.size() < 3 || color.a <= 0) return;
+    if (!m_Initialized || vertices.size() < 3 || color.a <= 0)
+    {
+        return;
+    }
     UseTexture(m_WhiteTexture);
     for (size_t i = 1; i + 1 < vertices.size(); ++i)
+    {
         Triangle(vertices[0], vertices[i], vertices[i + 1], color);
+    }
 }
 
 void Renderer::Rect(float x, float y, float width, float height, Color color)
 {
-    if (!m_Initialized || width <= 0 || height <= 0 || color.a <= 0) return;
+    if (!m_Initialized || width <= 0 || height <= 0 || color.a <= 0)
+    {
+        return;
+    }
     UseTexture(m_WhiteTexture);
     Triangle(Vec2(x, y), Vec2(x + width, y), Vec2(x + width, y + height), color);
     Triangle(Vec2(x, y), Vec2(x + width, y + height), Vec2(x, y + height), color);
@@ -253,16 +368,22 @@ void Renderer::Rect(float x, float y, float width, float height, Color color)
 
 void Renderer::RoundedRect(float x, float y, float width, float height, float radius, Color color)
 {
-    if (width <= 0 || height <= 0) return;
+    if (width <= 0 || height <= 0)
+    {
+        return;
+    }
     radius = std::max(0.0f, std::min(radius, std::min(width, height) * .5f));
-    if (radius < .5f) { Rect(x, y, width, height, color); return; }
+    if (radius < .5f)
+    {
+        Rect(x, y, width, height, color);
+        return;
+    }
     std::vector<Vec2> vertices;
     vertices.reserve(36);
-    const Vec2 centers[] = {
-        Vec2(x + width - radius, y + radius),
-        Vec2(x + width - radius, y + height - radius),
-        Vec2(x + radius, y + height - radius), Vec2(x + radius, y + radius)
-    };
+    const Vec2 centers[] = {Vec2(x + width - radius, y + radius),
+                            Vec2(x + width - radius, y + height - radius),
+                            Vec2(x + radius, y + height - radius),
+                            Vec2(x + radius, y + radius)};
     for (int corner = 0; corner < 4; ++corner)
     {
         float first = -Pi * .5f + corner * Pi * .5f;
@@ -270,7 +391,7 @@ void Renderer::RoundedRect(float x, float y, float width, float height, float ra
         {
             float angle = first + step * Pi / 16.0f;
             vertices.push_back(Vec2(centers[corner].x + std::cos(angle) * radius,
-                                   centers[corner].y + std::sin(angle) * radius));
+                                    centers[corner].y + std::sin(angle) * radius));
         }
     }
     Polygon(vertices, color);
@@ -278,40 +399,54 @@ void Renderer::RoundedRect(float x, float y, float width, float height, float ra
 
 void Renderer::Line(Vec2 start, Vec2 end, float thickness, Color color)
 {
-    if (thickness <= 0) return;
-    float dx = end.x - start.x, dy = end.y - start.y;
+    if (thickness <= 0)
+    {
+        return;
+    }
+    float dx = end.x - start.x;
+    float dy = end.y - start.y;
     float length = std::sqrt(dx * dx + dy * dy);
-    if (length < .001f) { Circle(start.x, start.y, thickness * .5f, color); return; }
+    if (length < .001f)
+    {
+        Circle(start.x, start.y, thickness * .5f, color);
+        return;
+    }
     float nx = -dy / length * thickness * .5f;
     float ny = dx / length * thickness * .5f;
-    Polygon({Vec2(start.x + nx, start.y + ny), Vec2(end.x + nx, end.y + ny),
-             Vec2(end.x - nx, end.y - ny), Vec2(start.x - nx, start.y - ny)}, color);
+    Polygon({Vec2(start.x + nx, start.y + ny),
+             Vec2(end.x + nx, end.y + ny),
+             Vec2(end.x - nx, end.y - ny),
+             Vec2(start.x - nx, start.y - ny)},
+            color);
 }
 
 void Renderer::Circle(float x, float y, float radius, Color color)
 {
-    if (!m_Initialized || radius <= 0 || color.a <= 0) return;
+    if (!m_Initialized || radius <= 0 || color.a <= 0)
+    {
+        return;
+    }
     UseTexture(m_WhiteTexture);
     int segments = std::max(16, std::min(80, static_cast<int>(radius * 1.5f)));
     for (int segment = 0; segment < segments; ++segment)
     {
         float a = segment * (2 * Pi / segments);
         float b = (segment + 1) * (2 * Pi / segments);
-        Triangle(Vec2(x, y), Vec2(x + std::cos(a) * radius, y + std::sin(a) * radius),
-                 Vec2(x + std::cos(b) * radius, y + std::sin(b) * radius), color);
+        Triangle(Vec2(x, y),
+                 Vec2(x + std::cos(a) * radius, y + std::sin(a) * radius),
+                 Vec2(x + std::cos(b) * radius, y + std::sin(b) * radius),
+                 color);
     }
 }
 
 void Renderer::TexturedRect(float x, float y, float width, float height, Color color)
 {
-    const Vertex vertices[] = {
-        {x, y, 0, 0, color.r, color.g, color.b, color.a},
-        {x + width, y, 1, 0, color.r, color.g, color.b, color.a},
-        {x + width, y + height, 1, 1, color.r, color.g, color.b, color.a},
-        {x, y, 0, 0, color.r, color.g, color.b, color.a},
-        {x + width, y + height, 1, 1, color.r, color.g, color.b, color.a},
-        {x, y + height, 0, 1, color.r, color.g, color.b, color.a}
-    };
+    const Vertex vertices[] = {{x, y, 0, 0, color.r, color.g, color.b, color.a},
+                               {x + width, y, 1, 0, color.r, color.g, color.b, color.a},
+                               {x + width, y + height, 1, 1, color.r, color.g, color.b, color.a},
+                               {x, y, 0, 0, color.r, color.g, color.b, color.a},
+                               {x + width, y + height, 1, 1, color.r, color.g, color.b, color.a},
+                               {x, y + height, 0, 1, color.r, color.g, color.b, color.a}};
     m_Vertices.insert(m_Vertices.end(), vertices, vertices + 6);
 }
 
@@ -319,15 +454,36 @@ Renderer::TextTexture Renderer::CreateTextTexture(const std::wstring& text, int 
 {
     TextTexture result = {0, 0, 0};
     HDC dc = CreateCompatibleDC(nullptr);
-    if (!dc) return result;
-    HFONT font = CreateFontW(-pixels, 0, 0, 0, weight, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE, L"Malgun Gothic");
-    if (!font) { DeleteDC(dc); return result; }
+    if (!dc)
+    {
+        return result;
+    }
+    HFONT font = CreateFontW(-pixels,
+                             0,
+                             0,
+                             0,
+                             weight,
+                             FALSE,
+                             FALSE,
+                             FALSE,
+                             DEFAULT_CHARSET,
+                             OUT_DEFAULT_PRECIS,
+                             CLIP_DEFAULT_PRECIS,
+                             ANTIALIASED_QUALITY,
+                             DEFAULT_PITCH | FF_DONTCARE,
+                             L"Malgun Gothic");
+    if (!font)
+    {
+        DeleteDC(dc);
+        return result;
+    }
     HGDIOBJ previousFont = SelectObject(dc, font);
     RECT bounds = {0, 0, 0, 0};
-    DrawTextW(dc, text.c_str(), static_cast<int>(text.size()), &bounds,
-        DT_CALCRECT | DT_LEFT | DT_TOP | DT_NOPREFIX);
+    DrawTextW(dc,
+              text.c_str(),
+              static_cast<int>(text.size()),
+              &bounds,
+              DT_CALCRECT | DT_LEFT | DT_TOP | DT_NOPREFIX);
     result.width = std::max(1L, bounds.right - bounds.left + 3L);
     result.height = std::max(1L, bounds.bottom - bounds.top + 2L);
     BITMAPINFO bitmapInfo = {};
@@ -346,21 +502,32 @@ Renderer::TextTexture Renderer::CreateTextTexture(const std::wstring& text, int 
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(255, 255, 255));
         RECT drawBounds = {0, 0, result.width, result.height};
-        DrawTextW(dc, text.c_str(), static_cast<int>(text.size()), &drawBounds,
-            DT_LEFT | DT_TOP | DT_NOPREFIX);
+        DrawTextW(dc,
+                  text.c_str(),
+                  static_cast<int>(text.size()),
+                  &drawBounds,
+                  DT_LEFT | DT_TOP | DT_NOPREFIX);
         GdiFlush();
         unsigned char* data = static_cast<unsigned char*>(bitmapPixels);
         for (int i = 0; i < result.width * result.height; ++i)
         {
-            const unsigned char alpha = std::max(data[i * 4], std::max(data[i * 4 + 1], data[i * 4 + 2]));
+            const unsigned char alpha =
+                std::max(data[i * 4], std::max(data[i * 4 + 1], data[i * 4 + 2]));
             data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = 255;
             data[i * 4 + 3] = alpha;
         }
         glGenTextures(1, &result.texture);
         glBindTexture(GL_TEXTURE_2D, result.texture);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, result.width, result.height, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     GL_RGBA8,
+                     result.width,
+                     result.height,
+                     0,
+                     GL_RGBA,
+                     GL_UNSIGNED_BYTE,
+                     data);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -377,13 +544,26 @@ Renderer::TextTexture Renderer::CreateTextTexture(const std::wstring& text, int 
 void Renderer::ClearTextCache()
 {
     for (const auto& entry : m_TextCache)
-        if (entry.second.texture) glDeleteTextures(1, &entry.second.texture);
+    {
+        if (entry.second.texture)
+        {
+            glDeleteTextures(1, &entry.second.texture);
+        }
+    }
     m_TextCache.clear();
 }
 
-void Renderer::Text(float x, float y, const std::wstring& text, float pixels, Color color, int weight)
+void Renderer::Text(float x,
+                    float y,
+                    const std::wstring& text,
+                    float pixels,
+                    Color color,
+                    int weight)
 {
-    if (!m_Initialized || text.empty() || pixels <= 0 || color.a <= 0) return;
+    if (!m_Initialized || text.empty() || pixels <= 0 || color.a <= 0)
+    {
+        return;
+    }
     int pixelHeight = std::max(1, static_cast<int>(std::round(pixels)));
     auto key = std::make_tuple(text, pixelHeight, weight);
     auto found = m_TextCache.find(key);
@@ -396,15 +576,32 @@ void Renderer::Text(float x, float y, const std::wstring& text, float pixels, Co
             m_BatchTexture = m_WhiteTexture;
         }
         TextTexture created = CreateTextTexture(text, pixelHeight, weight);
-        if (!created.texture) return;
+        if (!created.texture)
+        {
+            return;
+        }
         found = m_TextCache.emplace(key, created).first;
     }
     UseTexture(found->second.texture);
-    TexturedRect(x, y, static_cast<float>(found->second.width), static_cast<float>(found->second.height), color);
+    TexturedRect(x,
+                 y,
+                 static_cast<float>(found->second.width),
+                 static_cast<float>(found->second.height),
+                 color);
 }
 
-void Renderer::DrawSolidRect(float x, float y, float, float size, float r, float g, float b, float a)
+void Renderer::DrawSolidRect(float x,
+                             float y,
+                             float,
+                             float size,
+                             float r,
+                             float g,
+                             float b,
+                             float a)
 {
-    Rect(CanvasWidth * .5f + x - size * .5f, CanvasHeight * .5f - y - size * .5f,
-        size, size, Color(r, g, b, a));
+    Rect(CanvasWidth * .5f + x - size * .5f,
+         CanvasHeight * .5f - y - size * .5f,
+         size,
+         size,
+         Color(r, g, b, a));
 }

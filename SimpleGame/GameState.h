@@ -57,4 +57,4 @@ namespace echo
         void NormalizeProfile();
         void PreserveUnreadableSave(const std::wstring& path);
     };
-}
+} // namespace echo

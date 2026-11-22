@@ -36,9 +36,16 @@ public:
     bool Initialize();
     bool Resize(int width, int height);
     bool BeginScene();
-    void Composite(int viewportX, int viewportY, int viewportWidth, int viewportHeight,
+    void Composite(int viewportX,
+                   int viewportY,
+                   int viewportWidth,
+                   int viewportHeight,
                    const PostProcessSettings& settings);
-    bool IsReady() const { return m_Initialized && m_TargetsReady; }
+
+    bool IsReady() const
+    {
+        return m_Initialized && m_TargetsReady;
+    }
 
 private:
     struct Target
@@ -48,12 +55,31 @@ private:
         int width = 0;
         int height = 0;
     };
-    struct FilterUniforms { GLint source = -1, texel = -1, extract = -1, threshold = -1; };
-    struct BlurUniforms { GLint source = -1, direction = -1; };
+
+    struct FilterUniforms
+    {
+        GLint source = -1;
+        GLint texel = -1;
+        GLint extract = -1;
+        GLint threshold = -1;
+    };
+
+    struct BlurUniforms
+    {
+        GLint source = -1;
+        GLint direction = -1;
+    };
+
     struct CompositeUniforms
     {
-        GLint scene = -1, bloom = -1, blurred = -1, enabled = -1;
-        GLint aspect = -1, settings = -1, vignetteRange = -1, edgeRange = -1;
+        GLint scene = -1;
+        GLint bloom = -1;
+        GLint blurred = -1;
+        GLint enabled = -1;
+        GLint aspect = -1;
+        GLint settings = -1;
+        GLint vignetteRange = -1;
+        GLint edgeRange = -1;
     };
 
     static bool CreateTarget(Target& target, int width, int height);
@@ -66,8 +92,12 @@ private:
     bool m_Initialized = false;
     bool m_TargetsReady = false;
     GLuint m_VertexArray = 0;
-    GLuint m_FilterProgram = 0, m_BlurProgram = 0, m_CompositeProgram = 0;
-    Target m_Scene, m_Bloom[2], m_BlurredScene[2];
+    GLuint m_FilterProgram = 0;
+    GLuint m_BlurProgram = 0;
+    GLuint m_CompositeProgram = 0;
+    Target m_Scene;
+    Target m_Bloom[2];
+    Target m_BlurredScene[2];
     FilterUniforms m_FilterUniforms;
     BlurUniforms m_BlurUniforms;
     CompositeUniforms m_CompositeUniforms;

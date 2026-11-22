@@ -8,6 +8,7 @@ namespace
 {
     const char* FullscreenVertex = R"GLSL(#version 330 core
 out vec2 v_UV;
+
 void main()
 {
     const vec2 positions[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
@@ -24,6 +25,7 @@ uniform vec2 u_SourceTexel;
 uniform bool u_Extract;
 uniform float u_Threshold;
 out vec4 FragColor;
+
 void main()
 {
     // Four source samples downsample in linear light before either blur chain.
@@ -51,18 +53,22 @@ in vec2 v_UV;
 uniform sampler2D u_Source;
 uniform vec2 u_Direction;
 out vec4 FragColor;
+
 void main()
 {
     // Normalized, separable nine-tap Gaussian; clamp-to-edge avoids dark borders.
     vec3 color = texture(u_Source, v_UV).rgb * 0.2270270270;
-    color += (texture(u_Source, v_UV + u_Direction).rgb
-            + texture(u_Source, v_UV - u_Direction).rgb) * 0.1945945946;
+    color += (texture(u_Source, v_UV + u_Direction).rgb + texture(u_Source, v_UV - u_Direction).rgb)
+             * 0.1945945946;
     color += (texture(u_Source, v_UV + u_Direction * 2.0).rgb
-            + texture(u_Source, v_UV - u_Direction * 2.0).rgb) * 0.1216216216;
+              + texture(u_Source, v_UV - u_Direction * 2.0).rgb)
+             * 0.1216216216;
     color += (texture(u_Source, v_UV + u_Direction * 3.0).rgb
-            + texture(u_Source, v_UV - u_Direction * 3.0).rgb) * 0.0540540541;
+              + texture(u_Source, v_UV - u_Direction * 3.0).rgb)
+             * 0.0540540541;
     color += (texture(u_Source, v_UV + u_Direction * 4.0).rgb
-            + texture(u_Source, v_UV - u_Direction * 4.0).rgb) * 0.0162162162;
+              + texture(u_Source, v_UV - u_Direction * 4.0).rgb)
+             * 0.0162162162;
     FragColor = vec4(color, 1.0);
 }
 )GLSL";
@@ -88,13 +94,16 @@ vec3 LinearToSrgb(vec3 color)
     vec3 high = 1.055 * pow(color, vec3(1.0 / 2.4)) - 0.055;
     return mix(high, low, linearPart);
 }
+
 vec3 Filmic(vec3 color)
 {
     // Smooth highlight shoulder: high-energy emissive values survive capture and
     // bloom extraction, then are compressed for an ordinary SDR framebuffer.
-    return clamp((color * (2.51 * color + 0.03))
-               / (color * (2.43 * color + 0.59) + 0.14), 0.0, 1.0);
+    return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14),
+                 0.0,
+                 1.0);
 }
+
 void main()
 {
     vec3 color = max(texture(u_Scene, v_UV).rgb, vec3(0.0));
@@ -109,7 +118,10 @@ void main()
         float mask = smoothstep(u_EdgeRange.x, u_EdgeRange.y, radius) * u_Settings.w;
         color = mix(color, texture(u_BlurredScene, v_UV).rgb, mask);
     }
-    if (u_Settings.y > 0.0) color += texture(u_Bloom, v_UV).rgb * u_Settings.y;
+    if (u_Settings.y > 0.0)
+    {
+        color += texture(u_Bloom, v_UV).rgb * u_Settings.y;
+    }
     color *= 1.0 - smoothstep(u_VignetteRange.x, u_VignetteRange.y, radius) * u_Settings.z;
     color = Filmic(color * u_Settings.x);
     FragColor = vec4(LinearToSrgb(color), 1.0);
@@ -119,7 +131,10 @@ void main()
     GLuint CompileShader(GLenum type, const char* source)
     {
         GLuint shader = glCreateShader(type);
-        if (!shader) return 0;
+        if (!shader)
+        {
+            return 0;
+        }
         glShaderSource(shader, 1, &source, nullptr);
         glCompileShader(shader);
         GLint success = GL_FALSE;
@@ -141,8 +156,14 @@ void main()
         GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragment);
         if (!vertexShader || !fragmentShader)
         {
-            if (vertexShader) glDeleteShader(vertexShader);
-            if (fragmentShader) glDeleteShader(fragmentShader);
+            if (vertexShader)
+            {
+                glDeleteShader(vertexShader);
+            }
+            if (fragmentShader)
+            {
+                glDeleteShader(fragmentShader);
+            }
             return 0;
         }
         GLuint program = glCreateProgram();
@@ -154,7 +175,10 @@ void main()
         }
         glDeleteShader(vertexShader);
         glDeleteShader(fragmentShader);
-        if (!program) return 0;
+        if (!program)
+        {
+            return 0;
+        }
         GLint success = GL_FALSE;
         glGetProgramiv(program, GL_LINK_STATUS, &success);
         if (success == GL_FALSE)
@@ -172,30 +196,63 @@ void main()
     {
         return std::clamp(std::isfinite(value) ? value : fallback, minimum, maximum);
     }
-}
+} // namespace
 
 PostProcess::~PostProcess()
 {
     ReleaseTargets();
-    if (m_FilterProgram) glDeleteProgram(m_FilterProgram);
-    if (m_BlurProgram) glDeleteProgram(m_BlurProgram);
-    if (m_CompositeProgram) glDeleteProgram(m_CompositeProgram);
-    if (m_VertexArray) glDeleteVertexArrays(1, &m_VertexArray);
+    if (m_FilterProgram)
+    {
+        glDeleteProgram(m_FilterProgram);
+    }
+    if (m_BlurProgram)
+    {
+        glDeleteProgram(m_BlurProgram);
+    }
+    if (m_CompositeProgram)
+    {
+        glDeleteProgram(m_CompositeProgram);
+    }
+    if (m_VertexArray)
+    {
+        glDeleteVertexArrays(1, &m_VertexArray);
+    }
 }
 
 bool PostProcess::Initialize()
 {
-    if (m_Initialized) return true;
+    if (m_Initialized)
+    {
+        return true;
+    }
     // Repeated initialization after a shader failure does not leak programs.
-    if (m_FilterProgram) glDeleteProgram(m_FilterProgram);
-    if (m_BlurProgram) glDeleteProgram(m_BlurProgram);
-    if (m_CompositeProgram) glDeleteProgram(m_CompositeProgram);
+    if (m_FilterProgram)
+    {
+        glDeleteProgram(m_FilterProgram);
+    }
+    if (m_BlurProgram)
+    {
+        glDeleteProgram(m_BlurProgram);
+    }
+    if (m_CompositeProgram)
+    {
+        glDeleteProgram(m_CompositeProgram);
+    }
     m_FilterProgram = MakeProgram(FilterFragment);
     m_BlurProgram = MakeProgram(BlurFragment);
     m_CompositeProgram = MakeProgram(CompositeFragment);
-    if (!m_FilterProgram || !m_BlurProgram || !m_CompositeProgram) return false;
-    if (!m_VertexArray) glGenVertexArrays(1, &m_VertexArray);
-    if (!m_VertexArray) return false;
+    if (!m_FilterProgram || !m_BlurProgram || !m_CompositeProgram)
+    {
+        return false;
+    }
+    if (!m_VertexArray)
+    {
+        glGenVertexArrays(1, &m_VertexArray);
+    }
+    if (!m_VertexArray)
+    {
+        return false;
+    }
 
     m_FilterUniforms.source = glGetUniformLocation(m_FilterProgram, "u_Source");
     m_FilterUniforms.texel = glGetUniformLocation(m_FilterProgram, "u_SourceTexel");
@@ -221,7 +278,10 @@ bool PostProcess::CreateTarget(Target& target, int width, int height)
     target.height = height;
     glGenTextures(1, &target.texture);
     glGenFramebuffers(1, &target.framebuffer);
-    if (!target.texture || !target.framebuffer) return false;
+    if (!target.texture || !target.framebuffer)
+    {
+        return false;
+    }
     glBindTexture(GL_TEXTURE_2D, target.texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -235,8 +295,8 @@ bool PostProcess::CreateTarget(Target& target, int width, int height)
     const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        std::cerr << "PostProcess framebuffer incomplete (" << width << "x" << height
-                  << ", status " << status << ")." << std::endl;
+        std::cerr << "PostProcess framebuffer incomplete (" << width << "x" << height << ", status "
+                  << status << ")." << std::endl;
         return false;
     }
     return true;
@@ -244,8 +304,14 @@ bool PostProcess::CreateTarget(Target& target, int width, int height)
 
 void PostProcess::DeleteTarget(Target& target)
 {
-    if (target.framebuffer) glDeleteFramebuffers(1, &target.framebuffer);
-    if (target.texture) glDeleteTextures(1, &target.texture);
+    if (target.framebuffer)
+    {
+        glDeleteFramebuffers(1, &target.framebuffer);
+    }
+    if (target.texture)
+    {
+        glDeleteTextures(1, &target.texture);
+    }
     target = Target{};
 }
 
@@ -264,43 +330,65 @@ bool PostProcess::Resize(int width, int height)
 {
     width = std::max(1, width);
     height = std::max(1, height);
-    if (!m_Initialized) return false;
-    if (IsReady() && m_Scene.width == width && m_Scene.height == height) return true;
+    if (!m_Initialized)
+    {
+        return false;
+    }
+    if (IsReady() && m_Scene.width == width && m_Scene.height == height)
+    {
+        return true;
+    }
     GLint maximum = 0;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maximum);
     if (width > maximum || height > maximum)
     {
-        std::cerr << "PostProcess target exceeds GL_MAX_TEXTURE_SIZE; using direct rendering." << std::endl;
+        std::cerr << "PostProcess target exceeds GL_MAX_TEXTURE_SIZE; using direct rendering."
+                  << std::endl;
         ReleaseTargets();
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         return false;
     }
-    Target scene, bloom[2], blurred[2];
+    Target scene;
+    Target bloom[2];
+    Target blurred[2];
     const int halfWidth = std::max(1, (width + 1) / 2);
     const int halfHeight = std::max(1, (height + 1) / 2);
     bool success = CreateTarget(scene, width, height);
     for (int i = 0; success && i < 2; ++i)
+    {
         success = CreateTarget(bloom[i], halfWidth, halfHeight)
-               && CreateTarget(blurred[i], halfWidth, halfHeight);
+                  && CreateTarget(blurred[i], halfWidth, halfHeight);
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
     if (!success)
     {
         DeleteTarget(scene);
-        for (int i = 0; i < 2; ++i) { DeleteTarget(bloom[i]); DeleteTarget(blurred[i]); }
+        for (int i = 0; i < 2; ++i)
+        {
+            DeleteTarget(bloom[i]);
+            DeleteTarget(blurred[i]);
+        }
         ReleaseTargets();
         return false;
     }
     ReleaseTargets();
     m_Scene = scene;
-    for (int i = 0; i < 2; ++i) { m_Bloom[i] = bloom[i]; m_BlurredScene[i] = blurred[i]; }
+    for (int i = 0; i < 2; ++i)
+    {
+        m_Bloom[i] = bloom[i];
+        m_BlurredScene[i] = blurred[i];
+    }
     m_TargetsReady = true;
     return true;
 }
 
 bool PostProcess::BeginScene()
 {
-    if (!IsReady()) return false;
+    if (!IsReady())
+    {
+        return false;
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, m_Scene.framebuffer);
     glViewport(0, 0, m_Scene.width, m_Scene.height);
     glDisable(GL_FRAMEBUFFER_SRGB);
@@ -313,7 +401,10 @@ void PostProcess::DrawFullscreen()
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-void PostProcess::Filter(const Target& source, const Target& destination, bool extract, float threshold)
+void PostProcess::Filter(const Target& source,
+                         const Target& destination,
+                         bool extract,
+                         float threshold)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, destination.framebuffer);
     glViewport(0, 0, destination.width, destination.height);
@@ -327,7 +418,10 @@ void PostProcess::Filter(const Target& source, const Target& destination, bool e
     DrawFullscreen();
 }
 
-void PostProcess::Blur(const Target& source, const Target& destination, bool horizontal, float radius)
+void PostProcess::Blur(const Target& source,
+                       const Target& destination,
+                       bool horizontal,
+                       float radius)
 {
     glBindFramebuffer(GL_FRAMEBUFFER, destination.framebuffer);
     glViewport(0, 0, destination.width, destination.height);
@@ -335,25 +429,36 @@ void PostProcess::Blur(const Target& source, const Target& destination, bool hor
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, source.texture);
     glUniform1i(m_BlurUniforms.source, 0);
-    glUniform2f(m_BlurUniforms.direction, horizontal ? radius / source.width : 0.0f,
+    glUniform2f(m_BlurUniforms.direction,
+                horizontal ? radius / source.width : 0.0f,
                 horizontal ? 0.0f : radius / source.height);
     DrawFullscreen();
 }
 
-void PostProcess::Composite(int viewportX, int viewportY, int viewportWidth, int viewportHeight,
+void PostProcess::Composite(int viewportX,
+                            int viewportY,
+                            int viewportWidth,
+                            int viewportHeight,
                             const PostProcessSettings& settings)
 {
-    if (!IsReady()) return;
+    if (!IsReady())
+    {
+        return;
+    }
     const float exposure = SafeFloat(settings.exposure, 1.15f, 0.05f, 8.0f);
     const float bloom = settings.enabled && settings.bloomEnabled
-        ? SafeFloat(settings.bloomStrength, 0.18f, 0.0f, 2.0f) : 0.0f;
+                            ? SafeFloat(settings.bloomStrength, 0.18f, 0.0f, 2.0f)
+                            : 0.0f;
     const float edgeBlur = settings.enabled && settings.edgeBlurEnabled
-        ? SafeFloat(settings.edgeBlurStrength, 1.0f, 0.0f, 1.0f) : 0.0f;
+                               ? SafeFloat(settings.edgeBlurStrength, 1.0f, 0.0f, 1.0f)
+                               : 0.0f;
     const float vignette = settings.enabled && settings.vignetteEnabled
-        ? SafeFloat(settings.vignetteStrength, 0.35f, 0.0f, 0.95f) : 0.0f;
+                               ? SafeFloat(settings.vignetteStrength, 0.35f, 0.0f, 0.95f)
+                               : 0.0f;
     const float threshold = SafeFloat(settings.bloomThreshold, 1.0f, 0.0f, 16.0f);
     const float vignetteInner = SafeFloat(settings.vignetteInner, 0.38f, 0.0f, 2.0f);
-    const float vignetteOuter = SafeFloat(settings.vignetteOuter, 0.78f, vignetteInner + 0.001f, 3.0f);
+    const float vignetteOuter =
+        SafeFloat(settings.vignetteOuter, 0.78f, vignetteInner + 0.001f, 3.0f);
     const float edgeInner = SafeFloat(settings.edgeBlurInner, 0.30f, 0.0f, 2.0f);
     const float edgeOuter = SafeFloat(settings.edgeBlurOuter, 0.68f, edgeInner + 0.001f, 3.0f);
 
