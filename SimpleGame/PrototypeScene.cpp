@@ -22,6 +22,45 @@ uint32_t Hash(int x,int y,int salt=0) {
     v=(v^(v>>13))*1274126177u; return v^(v>>16);
 }
 int Mod(int n,int m) { return (n%m+m)%m; }
+constexpr int RoadSpacing=6, BuildingSpacing=4, LotTileRadius=1;
+constexpr double BuildingWidth=1.85, BuildingDepth=1.65;
+constexpr double CafeX=2.0, CafeY=-3.0;
+constexpr double CafeWidth=2.6, CafeDepth=1.5;
+constexpr double CafeRoofWidth=2.8, CafeRoofDepth=1.7;
+constexpr double LotSize=2*LotTileRadius+1;
+constexpr double PlayerClearance=.12;
+static_assert(BuildingWidth<LotSize && BuildingDepth<LotSize, "Building must fit inside its lot");
+static_assert(CafeRoofWidth<LotSize && CafeRoofDepth<LotSize, "Cafe roof must fit inside its lot");
+
+bool PlazaTile(int x,int y) { return std::abs(x)<3 && std::abs(y)<3; }
+bool RoadGridTile(int x,int y) { return Mod(x,RoadSpacing)==0 || Mod(y,RoadSpacing)==0; }
+bool CityRoadTile(int x,int y) { return !PlazaTile(x,y) && RoadGridTile(x,y); }
+// Preserve the original decoration anchors for Lumia, independently of city lots.
+bool DecorationAnchor(int x,int y) {
+    return !(std::abs(x)<5 && std::abs(y)<5)
+        && Mod(x,BuildingSpacing)==0 && Mod(y,BuildingSpacing)==0;
+}
+bool LotAvoidsRoad(double x,double y) {
+    // Tiles are centered on integer coordinates, with boundaries at +/-0.5.
+    // Exact boundary contact is allowed; any overlap with a road tile is rejected.
+    const int firstX=int(std::floor(x-LotSize*.5+.5));
+    const int lastX=int(std::ceil(x+LotSize*.5+.5))-1;
+    const int firstY=int(std::floor(y-LotSize*.5+.5));
+    const int lastY=int(std::ceil(y+LotSize*.5+.5))-1;
+    for(int tx=firstX;tx<=lastX;++tx) for(int ty=firstY;ty<=lastY;++ty)
+        if(CityRoadTile(tx,ty)) return false;
+    return true;
+}
+bool CityBuildingAt(int x,int y) {
+    return DecorationAnchor(x,y) && LotAvoidsRoad(x,y);
+}
+bool CityLotTile(int x,int y) {
+    if(std::abs(x-int(CafeX))<=LotTileRadius && std::abs(y-int(CafeY))<=LotTileRadius)
+        return true;
+    const int bx=int(std::round(double(x)/BuildingSpacing))*BuildingSpacing;
+    const int by=int(std::round(double(y)/BuildingSpacing))*BuildingSpacing;
+    return std::abs(x-bx)<=LotTileRadius && std::abs(y-by)<=LotTileRadius && CityBuildingAt(bx,by);
+}
 Vec2 Iso(double x,double y,float z=0) {
     return Vec2(float(710+(x-view->cameraX-y+view->cameraY)*48),
                 float(485+(x-view->cameraX+y-view->cameraY)*24-z));
@@ -64,10 +103,6 @@ void KeyCap(float x,float y,const std::wstring& key,const std::wstring& name) {
     draw->RoundedRect(x,y,30,27,5,C(0x23374A));
     Label(x+8,y+3,key,13,C(0xD3E2E9),600); Label(x+39,y+3,name,13,C(0x9FB3C0));
 }
-bool BuildingAt(int x,int y) {
-    if(std::abs(x)<5 && std::abs(y)<5) return false;
-    return Mod(x,4)==0 && Mod(y,4)==0;
-}
 void Character(double x,double y,Color coat,bool player,bool spirit=false,int id=0) {
     Vec2 p=Iso(x,y); float bob=spirit?float(std::sin(view->time*2+id)*4-7):0;
     Ellipse(p.x,p.y+3,15,6,C(0x020A14,.5f));
@@ -92,9 +127,10 @@ void Character(double x,double y,Color coat,bool player,bool spirit=false,int id
 void Building(int x,int y) {
     uint32_t seed=Hash(x,y,5); float height=75+(seed%4)*30.f;
     Color color=C(seed%3==0?0x3D4D6D:(seed%3==1?0x34485B:0x4B4667));
-    Box(x,y,1.85,1.65,height,color); Box(x,y,1.35,1.2,6,Tint(color,1.17f),height);
+    Box(x,y,BuildingWidth,BuildingDepth,height,color); Box(x,y,1.35,1.2,6,Tint(color,1.17f),height);
     Box(x-.25,y-.15,.5,.5,18,C(0x51647B),height+6);
-    Vec2 b=Iso(x+.925,y-.825), c=Iso(x+.925,y+.825), d=Iso(x-.925,y+.825);
+    Vec2 b=Iso(x+BuildingWidth*.5,y-BuildingDepth*.5);
+    Vec2 c=Iso(x+BuildingWidth*.5,y+BuildingDepth*.5), d=Iso(x-BuildingWidth*.5,y+BuildingDepth*.5);
     for(int row=0;row<int(height/25)-1;++row) for(int col=0;col<4;++col) {
         float t=(col+.55f)/4; bool lit=((Hash(x+row,y+col)>>2)%4)!=0;
         Color light=lit?C(seed%2?0xBDA5D2:0xE7BC86,.74f).Emissive(1.1f):C(0x26374C);
@@ -134,12 +170,13 @@ void Portal() {
     Label(p.x-37,p.y+13,game->realm?L"도시로 연결":L"LUMIA 접속",12,C(0xA7E5DD));
 }
 void Cafe() {
-    Box(1.4,-3.1,2.6,1.5,70,C(0x57627A)); Box(1.4,-3.1,2.8,1.7,7,C(0x8E797B),70);
-    Vec2 p=Iso(2.7,-2.35,27);
+    Box(CafeX,CafeY,CafeWidth,CafeDepth,70,C(0x57627A));
+    Box(CafeX,CafeY,CafeRoofWidth,CafeRoofDepth,7,C(0x8E797B),70);
+    Vec2 p=Iso(CafeX+CafeWidth*.5,CafeY+CafeDepth*.5,27);
     Poly({Vec2(p.x-62,p.y-30),Vec2(p.x,p.y+1),Vec2(p.x,p.y-23),Vec2(p.x-62,p.y-54)},C(0xC9B6A1));
-    Vec2 sign=Iso(1.4,-3.1,91); draw->RoundedRect(sign.x-63,sign.y-12,126,29,4,C(0x1D2F42));
+    Vec2 sign=Iso(CafeX,CafeY,91); draw->RoundedRect(sign.x-63,sign.y-12,126,29,4,C(0x1D2F42));
     Label(sign.x-49,sign.y-9,L"달빛 우체국",17,C(0xF0D2AD),600);
-    Vec2 table=Iso(.1,-2.2); Ellipse(table.x,table.y-15,21,10,C(0xB29580));
+    Vec2 table=Iso(1.0,-1.8); Ellipse(table.x,table.y-15,21,10,C(0xB29580));
     draw->Line(Vec2(table.x,table.y-15),Vec2(table.x,table.y+2),3,C(0x596172));
 }
 void Planter(double x,double y) {
@@ -176,8 +213,10 @@ void World() {
     for(int sum=-radius*2;sum<=radius*2;++sum) for(int dx=-radius;dx<=radius;++dx) {
         int dy=sum-dx; if(dy<-radius||dy>radius) continue;
         int x=centerX+dx,y=centerY+dy; uint32_t seed=Hash(x,y);
-        bool road=Mod(x,6)==0||Mod(y,6)==0,plaza=std::abs(x)<3&&std::abs(y)<3;
-        Color tile=lumia?C(seed%3==0?0x24464B:0x203E44):C(road&&!plaza?0x26364A:0x3A495C);
+        const bool lot=!lumia && CityLotTile(x,y);
+        const bool plaza=PlazaTile(x,y) && !lot;
+        const bool road=lumia?RoadGridTile(x,y):CityRoadTile(x,y);
+        Color tile=lumia?C(seed%3==0?0x24464B:0x203E44):C(road?0x26364A:(lot?0x465164:0x3A495C));
         if(lumia&&road) tile=C(0x304C59);
         Diamond(x,y,47.3f,23.5f,tile);
         if(plaza) Diamond(x,y,45,22,C(lumia?0x315D61:0x46566A));
@@ -191,15 +230,17 @@ void World() {
     std::vector<Object> objects;
     for(int x=centerX-radius;x<=centerX+radius;++x) for(int y=centerY-radius;y<=centerY+radius;++y) {
         if(Distance(game->x,game->y,x,y)>15) continue;
-        if(BuildingAt(x,y)) objects.push_back({double(x+y),lumia?1:0,double(x),double(y),0});
+        if(lumia?DecorationAnchor(x,y):CityBuildingAt(x,y))
+            objects.push_back({double(x+y),lumia?1:0,double(x),double(y),0});
         if(Mod(x,6)==1&&Mod(y,6)==1&&(std::abs(x)>3||std::abs(y)>3)) objects.push_back({double(x+y),lumia?2:3,double(x),double(y),0});
     }
     if(Distance(game->x,game->y,-2,.8)<18) objects.push_back({-1.2,4,-2,.8,0});
-    if(!lumia&&Distance(game->x,game->y,1.4,-3.1)<18) objects.push_back({-1.7,5,1.4,-3.1,0});
+    if(!lumia&&Distance(game->x,game->y,CafeX,CafeY)<18)
+        objects.push_back({CafeX+CafeY,5,CafeX,CafeY,0});
     if(!lumia&&Distance(game->x,game->y,1,-1.3)<18) objects.push_back({-.3,6,1,-1.3,0});
     if(!lumia) {
         objects.push_back({-4,10,-3,-1,0}); objects.push_back({5,10,3,2,0});
-        objects.push_back({2,11,-1,3,0}); objects.push_back({-1,11,3,-4,0});
+        objects.push_back({1.75,11,-1.25,3,0}); objects.push_back({-1,11,3,-4,0});
     }
     int cellX=int(std::floor(game->x/8)),cellY=int(std::floor(game->y/8));
     for(int x=cellX-1;x<=cellX+1;++x) for(int y=cellY-1;y<=cellY+1;++y) objects.push_back({double(x*8+y*8+5),9,double(x),double(y),0});
@@ -248,8 +289,10 @@ void Minimap() {
     for(int i=-3;i<=3;++i) for(int j=-3;j<=3;++j) {
         float px=x+122+(i-j)*13,py=y+88+(i+j)*6;
         int wx=int(std::floor(game->x))+i,wy=int(std::floor(game->y))+j;
-        bool road=Mod(wx,6)==0||Mod(wy,6)==0;
-        Poly({Vec2(px,py-5),Vec2(px+11,py),Vec2(px,py+5),Vec2(px-11,py)},C(road?0x355267:0x223B4C));
+        const bool road=game->realm==0?CityRoadTile(wx,wy):RoadGridTile(wx,wy);
+        const bool lot=game->realm==0 && CityLotTile(wx,wy);
+        Poly({Vec2(px,py-5),Vec2(px+11,py),Vec2(px,py+5),Vec2(px-11,py)},
+             C(road?0x355267:(lot?0x3B4B60:0x223B4C)));
     }
     auto marker=[&](double wx,double wy,Color c) {
         double dx=wx-game->x,dy=wy-game->y;
@@ -328,9 +371,13 @@ void Hud() {
 }
 bool IsBlocked(double x,double y,int realm) {
     if(realm!=0) return false;
-    int bx=int(std::round(x/4))*4,by=int(std::round(y/4))*4;
-    if(BuildingAt(bx,by)&&std::abs(x-bx)<.94&&std::abs(y-by)<.9) return true;
-    return std::abs(x-1.4)<1.4&&std::abs(y+3.1)<.85;
+    const int bx=int(std::round(x/BuildingSpacing))*BuildingSpacing;
+    const int by=int(std::round(y/BuildingSpacing))*BuildingSpacing;
+    if(CityBuildingAt(bx,by)
+        && std::abs(x-bx)<BuildingWidth*.5+PlayerClearance
+        && std::abs(y-by)<BuildingDepth*.5+PlayerClearance) return true;
+    return std::abs(x-CafeX)<CafeWidth*.5+PlayerClearance
+        && std::abs(y-CafeY)<CafeDepth*.5+PlayerClearance;
 }
 void Render(Renderer& renderer,const echo::GameState& state,const View& currentView) {
     draw=&renderer; game=&state; view=&currentView;

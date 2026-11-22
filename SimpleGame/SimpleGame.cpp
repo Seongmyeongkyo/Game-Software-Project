@@ -164,9 +164,8 @@ namespace
         view.helpOpen = false;
     }
 
-    void SwitchRealmSafely()
+    void EnsureWalkablePosition()
     {
-        state->SwitchRealm();
         if (!prototype::IsBlocked(state->x, state->y, state->realm)) return;
         const double originalX = state->x;
         const double originalY = state->y;
@@ -189,6 +188,12 @@ namespace
         // The authored hub origin is always open, including after world switching.
         state->x = state->y = 0.0;
         state->Save();
+    }
+
+    void SwitchRealmSafely()
+    {
+        state->SwitchRealm();
+        EnsureWalkablePosition();
     }
 
     void Interact()
@@ -547,6 +552,7 @@ int main(int argc, char** argv)
             : L"하나의 죽음은 하나의 생명을 만든다 · 당신의 선택에서 태어난 유실체.";
         view.time = 12.0;
     }
+    if (!captureMode) EnsureWalkablePosition();
     view.cameraX = state->x;
     view.cameraY = state->y;
     glutDisplayFunc(RenderScene);
