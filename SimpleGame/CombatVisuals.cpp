@@ -632,7 +632,7 @@ namespace combat_visuals
         Text(renderer,
              334.0f,
              178.0f,
-             L"사거리 안의 적 자동 공격    Q 유지  보호",
+             L"푸른 지면 경계 = 자동 공격 사거리    Q 유지  보호",
              11.0f,
              C(0x819FB0));
 

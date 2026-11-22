@@ -179,6 +179,37 @@ namespace prototype
             }
         }
 
+        void AttackRange()
+        {
+            // Combat selects enemies by Euclidean distance between world-space feet.
+            // Project that same circle instead of guessing a screen-space radius.
+            constexpr int segments = 128;
+            const double range = game->combat.Stats().range;
+            std::vector<Vec2> boundary;
+            boundary.reserve(segments);
+
+            for (int index = 0; index < segments; ++index)
+            {
+                const double angle = index * 2.0 * Pi / segments;
+                boundary.push_back(
+                    Iso(game->x + std::cos(angle) * range, game->y + std::sin(angle) * range));
+            }
+
+            draw->Polygon(boundary, C(0x51A9F5, .018f));
+
+            const Color edge = game->combat.targetId != 0 ? C(0x8CCBFF, .98f).Emissive(.25f)
+                                                          : C(0x6FB5EE, .9f).Emissive(.15f);
+
+            for (size_t index = 0; index < boundary.size(); ++index)
+            {
+                const Vec2 start = boundary[index];
+                const Vec2 end = boundary[(index + 1) % boundary.size()];
+                draw->Line(start, end, 5.0f, C(0x6CB6FF, .06f).Emissive(.3f));
+                draw->Line(start, end, 3.5f, C(0x081C33, .65f));
+                draw->Line(start, end, 1.5f, edge);
+            }
+        }
+
         void Box(double x,
                  double y,
                  double width,
@@ -508,6 +539,7 @@ namespace prototype
                  C(lumia ? 0x87D5C6 : 0xD0BFA4, .15f));
             if (lumia)
             {
+                AttackRange();
                 Label(center.x - 57, center.y + 105, L"공명 거점 · 안전지대", 12, C(0x91C6BD));
                 Vec2 arena = Iso(6.0, 4.0);
                 Ring(arena.x, arena.y, 180, 90, 1.5f, C(0xB493CF, .38f).Emissive(.25f));
