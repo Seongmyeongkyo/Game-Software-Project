@@ -389,11 +389,12 @@ namespace
                 state->Act(true);
             }
             break;
-        case ' ':
-            if (!PanelOpen())
+        case '4':
+        case '5':
+        case '6':
+            if (!PanelOpen() && state->realm == 1)
             {
-                state->Act(false);
-                view.attack = 1.0f;
+                state->UpgradeResonance(int(key - '4') + 1);
             }
             break;
         case 'r':
@@ -573,7 +574,9 @@ namespace
                 const double length = std::sqrt(moveX * moveX + moveY * moveY);
                 if (length > 0.0)
                 {
-                    const double distance = (shiftPressed ? 5.4 : 3.0) * dt;
+                    const double baseSpeed =
+                        state->realm == 1 ? state->combat.Stats().moveSpeed : 3.0;
+                    const double distance = baseSpeed * (shiftPressed ? 1.8 : 1.0) * dt;
                     const double candidateX = state->x + moveX / length * distance;
                     const double candidateY = state->y + moveY / length * distance;
                     if (prototype::IsBlocked(candidateX, candidateY, state->realm))
@@ -597,6 +600,16 @@ namespace
                 }
             }
             state->Update(dt, moveX, moveY, shiftPressed);
+            view.guarding = !PanelOpen() && state->realm == 1 && keys['q'];
+            if (!PanelOpen() && state->realm == 1)
+            {
+                const int previousDeaths = state->deaths;
+                state->UpdateCombat(dt, view.guarding);
+                if (state->deaths > previousDeaths)
+                {
+                    view.deathFlash = 1.0f;
+                }
+            }
             const double smoothing = 1.0 - std::exp(-7.0 * dt);
             view.cameraX += (state->x - view.cameraX) * smoothing;
             view.cameraY += (state->y - view.cameraY) * smoothing;
@@ -704,6 +717,10 @@ int main(int argc, char** argv)
         life.aggression = state->aggression;
         life.curiosity = state->curiosity;
         state->echoes.push_back(life);
+        if (captureRealm == 1)
+        {
+            state->combat.EnsureNearbyZones(0.0, 0.0);
+        }
         state->message =
             captureRealm == 0
                 ? L"2050년, 익숙한 도시에서 시작하는 낯선 이야기."
@@ -726,8 +743,9 @@ int main(int argc, char** argv)
     glutIgnoreKeyRepeat(1);
     previousTime = glutGet(GLUT_ELAPSED_TIME);
     glutTimerFunc(16, Timer, 0);
-    std::cout << "ECHO prototype | WASD/arrows move | TAB realm | E interact | Q protect\n"
-              << "SPACE act | B broadcast | R Lumia death | J journal | F1 help | F5 save\n";
+    std::cout
+        << "ECHO prototype | WASD/arrows move | TAB realm | E interact | Q protect\n"
+        << "Automatic ranged attack | Hold Q guard | 4/5/6 growth | B broadcast | J journal\n";
     glutMainLoop();
     Cleanup();
     return resultCode;

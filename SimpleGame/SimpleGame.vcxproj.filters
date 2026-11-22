@@ -33,6 +33,12 @@
     <ClInclude Include="GameState.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="Combat.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CombatVisuals.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="PrototypeScene.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -51,6 +57,12 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="GameState.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Combat.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CombatVisuals.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="PrototypeScene.cpp">

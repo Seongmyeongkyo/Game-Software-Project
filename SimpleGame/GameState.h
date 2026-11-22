@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include "Combat.h"
 
 namespace echo
 {
@@ -39,8 +40,11 @@ namespace echo
         std::vector<EchoLife> echoes;
         std::vector<Discovery> discoveries;
         std::wstring message;
+        CombatWorld combat;
 
         void Update(double dt, float moveX, float moveY, bool sprint);
+        void UpdateCombat(double dt, bool guarding);
+        bool UpgradeResonance(int index);
         void SwitchRealm();
         void Die();
         void Act(bool protect);

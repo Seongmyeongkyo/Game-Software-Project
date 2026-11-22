@@ -16,11 +16,14 @@
 #include <set>
 #include <sstream>
 #include <tuple>
+#include <utility>
 
 namespace
 {
     const size_t MaxEchoes = 100000;
     const size_t MaxDiscoveries = 250000;
+    const size_t MaxMonsters = 100000;
+    const size_t MaxLootDrops = 250000;
     const LONGLONG MaxSaveBytes = 64LL * 1024LL * 1024LL;
 
     std::wstring SaveDirectory()
@@ -55,6 +58,185 @@ namespace
                && protection >= 0.0f && protection <= 1.0f && aggression >= 0.0f
                && aggression <= 1.0f && curiosity >= 0.0f && curiosity <= 1.0f && sum > 0.99f
                && sum < 1.01f;
+    }
+
+    bool ValidTimer(float value, float maximum)
+    {
+        return std::isfinite(value) && value >= 0.0f && value <= maximum;
+    }
+
+    uint64_t MonsterIdentity(int zoneX, int zoneY, int slot)
+    {
+        auto zigzag = [](int coordinate)
+        {
+            const int64_t value = coordinate;
+            return static_cast<uint64_t>(value >= 0 ? value * 2 : -value * 2 - 1);
+        };
+
+        return (zigzag(zoneX) << 25) | (zigzag(zoneY) << 3) | static_cast<uint64_t>(slot + 1);
+    }
+
+    bool ValidCombat(const echo::CombatWorld& combat)
+    {
+        const auto& growth = combat.growth;
+        auto validCounter = [](int value)
+        {
+            return value >= 0 && value <= 1000000000;
+        };
+
+        if (growth.level < 1 || growth.level > 1000 || !validCounter(growth.xp)
+            || !validCounter(growth.fragments) || !validCounter(growth.cores)
+            || !validCounter(growth.kills) || !validCounter(growth.bosses)
+            || growth.bosses > growth.kills || growth.focusRank < 0 || growth.focusRank > 30
+            || growth.magnetRank < 0 || growth.magnetRank > 12 || growth.vitalityRank < 0
+            || growth.vitalityRank > 20 || combat.monsters.size() > MaxMonsters
+            || combat.drops.size() > MaxLootDrops || combat.nextDropId == 0
+            || combat.nextDropId == (std::numeric_limits<uint64_t>::max)())
+        {
+            return false;
+        }
+
+        if ((growth.level == 1000 && growth.xp != 0)
+            || (growth.level < 1000 && growth.xp >= combat.RequiredXP())
+            || !std::isfinite(combat.health) || combat.health < 0.0f
+            || combat.health > combat.Stats().maxHealth)
+        {
+            return false;
+        }
+
+        std::set<uint64_t> monsterIds;
+
+        for (const auto& monster : combat.monsters)
+        {
+            if (monster.zoneX < -833334 || monster.zoneX > 833334 || monster.zoneY < -833334
+                || monster.zoneY > 833334 || monster.slot < 0 || monster.slot > 3
+                || monster.kind < 0 || monster.kind > 3 || monster.boss != (monster.slot == 3)
+                || monster.boss != (monster.kind == 3)
+                || monster.id != MonsterIdentity(monster.zoneX, monster.zoneY, monster.slot)
+                || !monsterIds.insert(monster.id).second
+                || monster.level != echo::CombatWorld::ZoneLevel(monster.zoneX, monster.zoneY)
+                || !ValidCoordinate(monster.x) || !ValidCoordinate(monster.y)
+                || !ValidCoordinate(monster.homeX) || !ValidCoordinate(monster.homeY)
+                || !std::isfinite(monster.maxHealth) || !std::isfinite(monster.health)
+                || monster.health < 0.0f || monster.health > monster.maxHealth
+                || !ValidTimer(monster.respawnTimer, 25.0f)
+                || !ValidTimer(monster.attackTimer, 4.0f) || !ValidTimer(monster.telegraph, 1.2f))
+            {
+                return false;
+            }
+
+            const float expectedHealth =
+                monster.boss ? 140.0f + 24.0f * (monster.level - 1)
+                             : 32.0f + 8.0f * monster.kind + 11.0f * (monster.level - 1);
+
+            if (monster.maxHealth != expectedHealth
+                || (monster.boss && monster.respawnTimer != 0.0f))
+            {
+                return false;
+            }
+        }
+
+        std::set<uint64_t> dropIds;
+
+        for (const auto& drop : combat.drops)
+        {
+            if (drop.id == 0 || drop.id >= combat.nextDropId || !dropIds.insert(drop.id).second
+                || !ValidCoordinate(drop.x) || !ValidCoordinate(drop.y) || drop.kind < 0
+                || drop.kind > 2 || drop.amount <= 0 || drop.amount > 1000000)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    void WriteCombat(std::ostream& output, const echo::CombatWorld& combat)
+    {
+        const auto& growth = combat.growth;
+        output << "COMBAT " << growth.level << ' ' << growth.xp << ' ' << growth.fragments << ' '
+               << growth.cores << ' ' << growth.focusRank << ' ' << growth.magnetRank << ' '
+               << growth.vitalityRank << ' ' << growth.kills << ' ' << growth.bosses << ' '
+               << combat.health << ' ' << combat.nextDropId << '\n';
+        output << "MONSTERS " << combat.monsters.size() << '\n';
+
+        for (const auto& monster : combat.monsters)
+        {
+            output << monster.id << ' ' << monster.zoneX << ' ' << monster.zoneY << ' '
+                   << monster.slot << ' ' << monster.kind << ' ' << monster.level << ' '
+                   << (monster.boss ? 1 : 0) << ' ' << monster.x << ' ' << monster.y << ' '
+                   << monster.homeX << ' ' << monster.homeY << ' ' << monster.health << ' '
+                   << monster.maxHealth << ' ' << monster.respawnTimer << ' ' << monster.attackTimer
+                   << ' ' << monster.telegraph << '\n';
+        }
+
+        output << "LOOT " << combat.drops.size() << '\n';
+
+        for (const auto& drop : combat.drops)
+        {
+            output << drop.id << ' ' << drop.x << ' ' << drop.y << ' ' << drop.kind << ' '
+                   << drop.amount << '\n';
+        }
+    }
+
+    bool ReadCombat(std::istream& input, echo::CombatWorld& combat)
+    {
+        std::string token;
+        auto& growth = combat.growth;
+        bool valid = static_cast<bool>(input >> token) && token == "COMBAT"
+                     && static_cast<bool>(input >> growth.level >> growth.xp >> growth.fragments
+                                          >> growth.cores >> growth.focusRank >> growth.magnetRank
+                                          >> growth.vitalityRank >> growth.kills >> growth.bosses
+                                          >> combat.health >> combat.nextDropId);
+        size_t monsterCount = 0;
+        valid = valid && static_cast<bool>(input >> token >> monsterCount) && token == "MONSTERS"
+                && monsterCount <= MaxMonsters;
+
+        if (valid)
+        {
+            combat.monsters.reserve(monsterCount);
+        }
+
+        for (size_t i = 0; valid && i < monsterCount; ++i)
+        {
+            echo::Monster monster{};
+            int boss = 0;
+            valid = static_cast<bool>(input >> monster.id >> monster.zoneX >> monster.zoneY
+                                      >> monster.slot >> monster.kind >> monster.level >> boss
+                                      >> monster.x >> monster.y >> monster.homeX >> monster.homeY
+                                      >> monster.health >> monster.maxHealth >> monster.respawnTimer
+                                      >> monster.attackTimer >> monster.telegraph)
+                    && (boss == 0 || boss == 1);
+            monster.boss = boss == 1;
+
+            if (valid)
+            {
+                combat.monsters.push_back(monster);
+            }
+        }
+
+        size_t dropCount = 0;
+        valid = valid && static_cast<bool>(input >> token >> dropCount) && token == "LOOT"
+                && dropCount <= MaxLootDrops;
+
+        if (valid)
+        {
+            combat.drops.reserve(dropCount);
+        }
+
+        for (size_t i = 0; valid && i < dropCount; ++i)
+        {
+            echo::LootDrop drop{};
+            valid =
+                static_cast<bool>(input >> drop.id >> drop.x >> drop.y >> drop.kind >> drop.amount);
+
+            if (valid)
+            {
+                combat.drops.push_back(drop);
+            }
+        }
+
+        return valid && ValidCombat(combat);
     }
 
     std::wstring BackupSuffix()
@@ -112,7 +294,8 @@ namespace echo
             std::sqrt(static_cast<double>(moveX) * moveX + static_cast<double>(moveY) * moveY);
         if (length > 0.00001)
         {
-            const double distance = (sprint ? 5.4 : 3.0) * dt;
+            const double speed = realm == 1 ? combat.Stats().moveSpeed : 3.0;
+            const double distance = speed * (sprint ? 1.8 : 1.0) * dt;
             const double nextX = x + (moveX / length) * distance;
             const double nextY = y + (moveY / length) * distance;
             if (ValidCoordinate(nextX) && ValidCoordinate(nextY))
@@ -132,9 +315,59 @@ namespace echo
         }
     }
 
+    void GameState::UpdateCombat(double dt, bool guarding)
+    {
+        if (realm != 1)
+        {
+            return;
+        }
+
+        const CombatOutcome outcome = combat.Update(dt, x, y, guarding);
+
+        if (outcome.shotsFired > 0)
+        {
+            aggression += 0.002f * outcome.shotsFired;
+            NormalizeProfile();
+        }
+
+        if (!combat.announcement.empty())
+        {
+            message = combat.announcement;
+        }
+
+        if (outcome.playerDied)
+        {
+            Die();
+        }
+        else if (outcome.changed)
+        {
+            Save();
+        }
+    }
+
+    bool GameState::UpgradeResonance(int index)
+    {
+        if (realm != 1)
+        {
+            message = L"공명 성장은 루미아에서 진행할 수 있습니다.";
+            return false;
+        }
+
+        const bool upgraded = combat.Upgrade(index);
+        message = combat.announcement;
+
+        if (upgraded)
+        {
+            Save();
+        }
+
+        return upgraded;
+    }
+
     void GameState::SwitchRealm()
     {
         realm = realm == 0 ? 1 : 0;
+        combat.OnRealmChanged();
         message = realm == 1 ? L"루미아 접속 완료 · 현실에서 이어진 선택이 이곳에도 남습니다."
                              : L"현실 도시로 돌아왔습니다 · 루미아의 존재와 발견은 보존됩니다.";
         Save();
@@ -166,6 +399,7 @@ namespace echo
             x = 1.0;
             y = -1.0;
         }
+        combat.ResetAfterDeath();
         message = L"하나의 죽음, 하나의 생명 · 유실체 #" + std::to_wstring(life.id)
                   + L"가 당신의 성향을 이어받아 루미아에 태어났습니다.";
         Save();
@@ -217,6 +451,10 @@ namespace echo
         discoveries.push_back(discovery);
         curiosity += 0.08f;
         NormalizeProfile();
+        if (worldRealm == 1)
+        {
+            combat.AddExperience(12);
+        }
         message = worldRealm == 0
                       ? L"현실의 숨겨진 흔적을 발견했습니다 · 이 발견은 세계에 남습니다."
                       : L"루미아의 잔향을 발견했습니다 · 이 장소와 발견 기록이 보존됩니다.";
@@ -256,7 +494,7 @@ namespace echo
             || travelled < 0.0 || (realm != 0 && realm != 1) || deaths < 0
             || static_cast<size_t>(deaths) != echoes.size() || echoes.size() > MaxEchoes
             || discoveries.size() > MaxDiscoveries
-            || !ValidProfile(protection, aggression, curiosity))
+            || !ValidProfile(protection, aggression, curiosity) || !ValidCombat(combat))
         {
             message = L"현재 상태 검증에 실패해 이전 저장 파일을 유지했습니다.";
             return false;
@@ -264,7 +502,7 @@ namespace echo
 
         std::ostringstream output;
         output.imbue(std::locale::classic());
-        output << std::setprecision(17) << "ECHO_PROTO_SAVE 1\n"
+        output << std::setprecision(17) << "ECHO_PROTO_SAVE 2\n"
                << "STATE " << realm << ' ' << x << ' ' << y << ' ' << travelled << ' ' << deaths
                << ' ' << protection << ' ' << aggression << ' ' << curiosity << ' '
                << (broadcasting ? 1 : 0) << ' ' << nextEchoId << '\n'
@@ -296,6 +534,7 @@ namespace echo
             }
             output << discovery.realm << ' ' << discovery.cellX << ' ' << discovery.cellY << '\n';
         }
+        WriteCombat(output, combat);
         output << "END\n";
         const std::string data = output.str();
         if (data.size() > static_cast<size_t>(MaxSaveBytes))
@@ -333,6 +572,7 @@ namespace echo
             return false;
         }
         saveTimer = 0.0;
+        combat.dirty = false;
         return true;
     }
 
@@ -416,8 +656,9 @@ namespace echo
         size_t discoveryCount = 0;
         std::vector<EchoLife> savedEchoes;
         std::vector<Discovery> savedDiscoveries;
+        CombatWorld savedCombat;
         bool valid = static_cast<bool>(input >> token >> version) && token == "ECHO_PROTO_SAVE"
-                     && version == 1;
+                     && (version == 1 || version == 2);
         valid = valid && static_cast<bool>(input >> token) && token == "STATE"
                 && static_cast<bool>(input >> savedRealm >> savedX >> savedY >> savedTravelled
                                      >> savedDeaths >> savedProtection >> savedAggression
@@ -468,6 +709,11 @@ namespace echo
                 savedDiscoveries.push_back(discovery);
             }
         }
+        if (valid && version == 2)
+        {
+            valid = ReadCombat(input, savedCombat);
+        }
+
         valid = valid && static_cast<bool>(input >> token) && token == "END";
         if (valid)
         {
@@ -492,6 +738,9 @@ namespace echo
         nextEchoId = savedNextId;
         echoes.swap(savedEchoes);
         discoveries.swap(savedDiscoveries);
+        combat = std::move(savedCombat);
+        combat.OnRealmChanged();
+        combat.dirty = false;
         saveTimer = 0.0;
         saveBlocked = false;
         message = L"이전 세계 기록을 이어갑니다 · 발견과 유실체가 보존되어 있습니다.";

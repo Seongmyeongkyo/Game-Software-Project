@@ -15,6 +15,7 @@ namespace prototype
         bool dialogueOpen = false;
         bool journalOpen = false;
         bool helpOpen = false;
+        bool guarding = false;
         std::wstring dialogue;
     };
 

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "PrototypeScene.h"
+#include "CombatVisuals.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -491,8 +492,36 @@ namespace prototype
                 }
             }
             Vec2 center = Iso(0, 0);
-            Ring(center.x, center.y, 104, 52, 1, C(lumia ? 0x87D5C6 : 0xD0BFA4, .5f));
-            Ring(center.x, center.y, 110, 55, 1, C(lumia ? 0x87D5C6 : 0xD0BFA4, .15f));
+            const float hubRadiusX = lumia ? 190.07f : 104.0f;
+            const float hubRadiusY = lumia ? 95.04f : 52.0f;
+            Ring(center.x,
+                 center.y,
+                 hubRadiusX,
+                 hubRadiusY,
+                 1,
+                 C(lumia ? 0x87D5C6 : 0xD0BFA4, .5f));
+            Ring(center.x,
+                 center.y,
+                 hubRadiusX + 6,
+                 hubRadiusY + 3,
+                 1,
+                 C(lumia ? 0x87D5C6 : 0xD0BFA4, .15f));
+            if (lumia)
+            {
+                Label(center.x - 57, center.y + 105, L"공명 거점 · 안전지대", 12, C(0x91C6BD));
+                Vec2 arena = Iso(6.0, 4.0);
+                Ring(arena.x, arena.y, 180, 90, 1.5f, C(0xB493CF, .38f).Emissive(.25f));
+                Ring(arena.x, arena.y, 170, 85, 1, C(0xB493CF, .16f));
+                Label(arena.x - 62, arena.y + 93, L"송신탑의 잔향 · 보스", 12, C(0xB3A4CA));
+                for (const auto& monster : game->combat.monsters)
+                {
+                    if (monster.health > 0 && monster.telegraph > 0
+                        && Distance(game->x, game->y, monster.x, monster.y) < 18)
+                    {
+                        combat_visuals::DrawTelegraph(*draw, monster, Iso(monster.x, monster.y));
+                    }
+                }
+            }
 
             struct Object
             {
@@ -552,6 +581,23 @@ namespace prototype
             }
             if (lumia)
             {
+                for (size_t i = 0; i < game->combat.monsters.size(); ++i)
+                {
+                    const auto& monster = game->combat.monsters[i];
+                    if (monster.health > 0 && Distance(game->x, game->y, monster.x, monster.y) < 18)
+                    {
+                        objects.push_back(
+                            {monster.x + monster.y, 12, monster.x, monster.y, int(i)});
+                    }
+                }
+                for (size_t i = 0; i < game->combat.drops.size(); ++i)
+                {
+                    const auto& drop = game->combat.drops[i];
+                    if (Distance(game->x, game->y, drop.x, drop.y) < 18)
+                    {
+                        objects.push_back({drop.x + drop.y, 13, drop.x, drop.y, int(i)});
+                    }
+                }
                 for (size_t i = 0; i < game->echoes.size(); ++i)
                 {
                     const auto& e = game->echoes[i];
@@ -603,9 +649,9 @@ namespace prototype
                     break;
                 case 7:
                     Character(object.x, object.y, C(0x548EA2), true);
-                    if (view->attack > 0)
+                    if (view->guarding)
                     {
-                        Ring(p.x + 12, p.y - 23, 55, 25, 3, C(0xE8D4A9, view->attack * 2));
+                        Ring(p.x, p.y - 21, 25, 31, 2, C(0x96EACB, .7f).Emissive(.6f));
                     }
                     break;
                 case 8:
@@ -629,10 +675,36 @@ namespace prototype
                 case 11:
                     Bench(object.x, object.y);
                     break;
+                case 12:
+                {
+                    const auto& monster = game->combat.monsters[object.id];
+                    combat_visuals::DrawMonster(*draw,
+                                                monster,
+                                                p,
+                                                view->time,
+                                                monster.id == game->combat.targetId);
+                    break;
+                }
+                case 13:
+                    combat_visuals::DrawDrop(*draw, game->combat.drops[object.id], p, view->time);
+                    break;
                 }
             }
             if (lumia)
             {
+                for (const auto& projectile : game->combat.projectiles)
+                {
+                    std::vector<Vec2> projectedTrail;
+                    projectedTrail.reserve(projectile.trail.size() + 1);
+
+                    for (const auto& point : projectile.trail)
+                    {
+                        projectedTrail.push_back(Iso(point.x, point.y));
+                    }
+
+                    projectedTrail.push_back(Iso(projectile.x, projectile.y));
+                    combat_visuals::DrawProjectile(*draw, projectile, projectedTrail, view->time);
+                }
                 for (int i = 0; i < 65; ++i)
                 {
                     float x = float(Hash(i, 4) % 1440);
@@ -680,6 +752,17 @@ namespace prototype
             }
             if (game->realm == 1)
             {
+                for (const auto& monster : game->combat.monsters)
+                {
+                    if (monster.health > 0)
+                    {
+                        marker(monster.x, monster.y, C(monster.boss ? 0xE99EB7 : 0xCF997A));
+                    }
+                }
+                for (const auto& drop : game->combat.drops)
+                {
+                    marker(drop.x, drop.y, C(0xE9D38E));
+                }
                 for (const auto& life : game->echoes)
                 {
                     marker(life.x, life.y, C(0x9AEAD8));
@@ -714,7 +797,11 @@ namespace prototype
                   600);
             Label(557,
                   63,
-                  lumia ? L"이름 없는 정원 · 잔향 관측 구역" : L"2050  ·  해온시 달빛 지구",
+                  lumia ? L"잔향 정원 · 위험도 "
+                              + std::to_wstring(
+                                  echo::CombatWorld::ZoneLevel(int(std::floor(game->x / 12)),
+                                                               int(std::floor(game->y / 12))))
+                        : L"2050  ·  해온시 달빛 지구",
                   10,
                   C(0x8CA7B8));
             Panel(1164, 26, 244, 62);
@@ -727,27 +814,26 @@ namespace prototype
             Label(1182, 64, L"[J] 기록   ·   [F1] 도움말", 10, C(0x8CA1B5));
             Panel(32, 156, 250, 194);
             Label(50, 172, L"지금, 우리의 이야기", 12, accent, 600);
-            Label(50,
-                  200,
-                  lumia ? L"남겨진 생명의 온도" : L"방송이 끝난 뒤에도",
-                  20,
-                  C(0xE4EBEE),
-                  600);
+            Label(50, 200, lumia ? L"송신탑의 잔향" : L"방송이 끝난 뒤에도", 20, C(0xE4EBEE), 600);
             Label(50,
                   237,
-                  lumia ? L"당신의 죽음에서 태어난 존재는" : L"세아와 이야기를 나누고",
+                  lumia ? (game->combat.growth.bosses > 0 ? L"송신자의 기록을 회수했습니다."
+                                                          : L"잡음 편린을 정리하고")
+                        : L"세아와 이야기를 나누고",
                   13,
                   C(0xA5B8C7));
             Label(50,
                   260,
-                  lumia ? L"어떤 삶을 살아가게 될까요?" : L"화면 너머의 세계를 찾아보세요.",
+                  lumia ? (game->combat.growth.bosses > 0 ? L"다음 구역의 잔향을 찾아보세요."
+                                                          : L"파편으로 잔향탄을 조율하세요.")
+                        : L"화면 너머의 세계를 찾아보세요.",
                   13,
                   C(0xA5B8C7));
             draw->Rect(50, 293, 212, 1, C(0x7890A3, .2f));
             draw->Circle(54, 319, 3, accent);
             Label(66,
                   309,
-                  lumia ? L"[R] 사망 · 유실체 탄생 체험" : L"[E] 대화와 기록 조사",
+                  lumia ? L"사거리 안의 적을 자동 공격" : L"[E] 대화와 기록 조사",
                   12,
                   C(0xD3DDE0));
             Panel(32, 673, 250, 133);
@@ -786,7 +872,7 @@ namespace prototype
             Label(1182, 249, L"달콩  여기 분위기 너무 좋다", 12, C(0xA8C8CB));
             Label(1182,
                   280,
-                  lumia ? L"새벽별  방금 빛난 거 봤어요?" : L"새벽별  세아님 또 길 잃으심?",
+                  lumia ? L"새벽별  붉은 원 밖으로 피해요!" : L"새벽별  세아님 또 길 잃으심?",
                   11,
                   C(0xB9B1D5));
             Label(1182, 310, L"세아  ...지름길 찾는 중이거든?", 11, C(0xD5BFAF));
@@ -815,6 +901,10 @@ namespace prototype
             {
                 Panel(350, 741, 775, 51, .94f);
                 Label(370, 755, game->message, 13, C(0xCCDFDD));
+            }
+            if (lumia)
+            {
+                combat_visuals::DrawHud(*draw, game->combat, game->x, game->y);
             }
             if (view->deathFlash > 0)
             {
@@ -877,19 +967,22 @@ namespace prototype
                       C(0xAEC7CE));
                 Label(420,
                       398,
-                      view->helpOpen ? L"Q   보호 행동     SPACE   공격 행동"
+                      view->helpOpen ? L"사거리 안의 적 자동 공격   Q 유지 보호"
                                      : L"한 번 태어난 생명과 발견한 기록은 저장됩니다.",
                       16,
                       C(0xAEC7CE));
                 Label(420,
                       444,
-                      view->helpOpen ? L"R   루미아에서 사망·탄생을 체험"
-                                     : L"새 지역은 이어지고, 지나온 선택은 남습니다.",
+                      view->helpOpen
+                          ? L"R   루미아에서 사망·탄생을 체험"
+                          : L"공명 Lv." + std::to_wstring(game->combat.growth.level) + L"  ·  처치 "
+                                + std::to_wstring(game->combat.growth.kills) + L"  ·  보스 "
+                                + std::to_wstring(game->combat.growth.bosses),
                       16,
                       C(0xAEC7CE));
                 Label(420,
                       490,
-                      view->helpOpen ? L"B   방송 시작·종료     J   기록"
+                      view->helpOpen ? L"B 방송   J 기록   4 / 5 / 6 공명 강화"
                                      : L"“네가 가고 싶은 곳부터 가자.”",
                       16,
                       C(0xAEC7CE));
