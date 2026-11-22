@@ -1,0 +1,20 @@
+/.vs/
+/SimpleGame/x64/
+
+# Visual Studio build outputs and per-user settings
+*.exe
+*.exe.recipe
+*.ilk
+*.pdb
+*.obj
+*.log
+*.pch
+*.idb
+*.tlog
+*.lastbuildstate
+*.suo
+*.db
+*.vcxproj.user
+
+# Keep bundled dependency libraries and runtime DLLs tracked.
+
