@@ -372,6 +372,31 @@ namespace
         {
             if (state->Save()) state->message = L"현재 세계와 생명의 기록을 저장했습니다.";
         }
+        auto& effects = renderer->PostProcessing();
+        if (key == GLUT_KEY_F2)
+        {
+            effects.enabled = !effects.enabled;
+            state->message = effects.enabled ? L"후처리 켜짐 · HDR 톤 매핑과 화면 효과를 적용합니다."
+                                             : L"후처리 꺼짐 · 기본 장면과 비교할 수 있습니다.";
+        }
+        if (key == GLUT_KEY_F3)
+        {
+            effects.bloomEnabled = !effects.bloomEnabled;
+            state->message = effects.bloomEnabled ? L"블룸 켜짐 · 밝은 빛이 부드럽게 번집니다."
+                                                  : L"블룸 꺼짐";
+        }
+        if (key == GLUT_KEY_F4)
+        {
+            effects.vignetteEnabled = !effects.vignetteEnabled;
+            state->message = effects.vignetteEnabled ? L"비넷 켜짐 · 화면 가장자리를 차분하게 낮춥니다."
+                                                     : L"비넷 꺼짐";
+        }
+        if (key == GLUT_KEY_F6)
+        {
+            effects.edgeBlurEnabled = !effects.edgeBlurEnabled;
+            state->message = effects.edgeBlurEnabled ? L"가장자리 블러 켜짐 · 중심에서 멀수록 부드러워집니다."
+                                                     : L"가장자리 블러 꺼짐";
+        }
     }
 
     void SpecialUp(int key, int, int)

@@ -14,7 +14,9 @@ constexpr double Pi = 3.141592653589793;
 Color C(unsigned rgb, float alpha = 1) {
     return Color(((rgb>>16)&255)/255.f, ((rgb>>8)&255)/255.f, (rgb&255)/255.f, alpha);
 }
-Color Tint(Color c, float value) { return Color(c.r*value,c.g*value,c.b*value,c.a); }
+Color Tint(Color c, float value) {
+    return Color(c.r*value,c.g*value,c.b*value,c.a).Emissive(c.emission);
+}
 uint32_t Hash(int x,int y,int salt=0) {
     uint32_t v=uint32_t(x)*374761393u+uint32_t(y)*668265263u+uint32_t(salt)*2246822519u;
     v=(v^(v>>13))*1274126177u; return v^(v>>16);
@@ -69,10 +71,11 @@ bool BuildingAt(int x,int y) {
 void Character(double x,double y,Color coat,bool player,bool spirit=false,int id=0) {
     Vec2 p=Iso(x,y); float bob=spirit?float(std::sin(view->time*2+id)*4-7):0;
     Ellipse(p.x,p.y+3,15,6,C(0x020A14,.5f));
-    if(player) Ring(p.x,p.y+3,19,8,2,C(0x83F3DE,.7f));
+    if(player) Ring(p.x,p.y+3,19,8,2,C(0x83F3DE,.7f).Emissive(.65f));
     if(spirit) {
-        Ellipse(p.x,p.y-23+bob,28,36,Color(coat.r,coat.g,coat.b,.07f));
-        Ring(p.x,p.y,22,9,1.4f,Color(coat.r,coat.g,coat.b,.45f));
+        coat=coat.Emissive(.65f);
+        Ellipse(p.x,p.y-23+bob,28,36,Color(coat.r,coat.g,coat.b,.07f).Emissive(.5f));
+        Ring(p.x,p.y,22,9,1.4f,Color(coat.r,coat.g,coat.b,.45f).Emissive(.8f));
     }
     float bottom=p.y+bob;
     draw->Line(Vec2(p.x-5,bottom-18),Vec2(p.x-7,bottom),5,C(0x202D48));
@@ -80,7 +83,7 @@ void Character(double x,double y,Color coat,bool player,bool spirit=false,int id
     Poly({Vec2(p.x-10,bottom-33),Vec2(p.x+9,bottom-33),Vec2(p.x+13,bottom-9),Vec2(p.x-12,bottom-9)},coat);
     draw->Line(Vec2(p.x-10,bottom-29),Vec2(p.x-15,bottom-14),5,Tint(coat,.8f));
     draw->Line(Vec2(p.x+10,bottom-29),Vec2(p.x+15,bottom-14),5,coat);
-    draw->Circle(p.x,bottom-42,10,C(spirit?0xCBFAF2:0xF1C9AF));
+    draw->Circle(p.x,bottom-42,10,C(spirit?0xCBFAF2:0xF1C9AF).Emissive(spirit?.45f:0.f));
     Poly({Vec2(p.x-11,bottom-44),Vec2(p.x-8,bottom-53),Vec2(p.x+5,bottom-54),
           Vec2(p.x+12,bottom-44),Vec2(p.x+5,bottom-47),Vec2(p.x-2,bottom-41)},C(player?0xE2D9EF:0x29354A));
     draw->Rect(p.x+4,bottom-44,2,2,C(0x18263C));
@@ -94,7 +97,7 @@ void Building(int x,int y) {
     Vec2 b=Iso(x+.925,y-.825), c=Iso(x+.925,y+.825), d=Iso(x-.925,y+.825);
     for(int row=0;row<int(height/25)-1;++row) for(int col=0;col<4;++col) {
         float t=(col+.55f)/4; bool lit=((Hash(x+row,y+col)>>2)%4)!=0;
-        Color light=lit?C(seed%2?0xBDA5D2:0xE7BC86,.74f):C(0x26374C);
+        Color light=lit?C(seed%2?0xBDA5D2:0xE7BC86,.74f).Emissive(1.1f):C(0x26374C);
         Vec2 q(b.x+(c.x-b.x)*t,b.y+(c.y-b.y)*t-22-row*25);
         Poly({q,Vec2(q.x-8,q.y+4),Vec2(q.x-8,q.y-5),Vec2(q.x,q.y-9)},light);
         Vec2 u(d.x+(c.x-d.x)*t,d.y+(c.y-d.y)*t-22-row*25);
@@ -105,7 +108,8 @@ void Lamp(double x,double y) {
     Vec2 p=Iso(x,y); Ellipse(p.x+5,p.y,39,16,C(0xF4C780,.045f));
     draw->Line(p,Vec2(p.x,p.y-75),3,C(0x435B70));
     draw->Line(Vec2(p.x,p.y-75),Vec2(p.x+15,p.y-75),3,C(0x60748C));
-    draw->Circle(p.x+15,p.y-73,11,C(0xFFDDA4,.06f)); draw->Rect(p.x+8,p.y-75,14,3,C(0xF1D9B0));
+    draw->Circle(p.x+15,p.y-73,11,C(0xFFDDA4,.06f).Emissive(.6f));
+    draw->Rect(p.x+8,p.y-75,14,3,C(0xF1D9B0).Emissive(2.4f));
 }
 void Tree(double x,double y,uint32_t seed) {
     Vec2 p=Iso(x,y); Ellipse(p.x,p.y+2,29,11,C(0x020D16,.34f));
@@ -117,14 +121,16 @@ void Tree(double x,double y,uint32_t seed) {
 void Crystal(double x,double y,float height=65) {
     Vec2 p=Iso(x,y); Ellipse(p.x,p.y,38,17,C(0x76E6D2,.035f));
     Poly({Vec2(p.x,p.y-height),Vec2(p.x+14,p.y-20),Vec2(p.x,p.y+2),Vec2(p.x-14,p.y-20)},C(0x3EBAAC));
-    Poly({Vec2(p.x,p.y-height),Vec2(p.x+14,p.y-20),Vec2(p.x,p.y+2)},C(0x81F1D1));
-    draw->Line(Vec2(p.x,p.y-height),Vec2(p.x,p.y+2),1,C(0xE0FFEA)); Ring(p.x,p.y+5,25,11,1,C(0x66E0CB,.45f));
+    Poly({Vec2(p.x,p.y-height),Vec2(p.x+14,p.y-20),Vec2(p.x,p.y+2)},C(0x81F1D1).Emissive(2.0f));
+    draw->Line(Vec2(p.x,p.y-height),Vec2(p.x,p.y+2),1,C(0xE0FFEA).Emissive(2.8f));
+    Ring(p.x,p.y+5,25,11,1,C(0x66E0CB,.45f).Emissive(.7f));
 }
 void Portal() {
     Vec2 p=Iso(-2,.8); Box(-2,.8,1.1,.7,8,C(game->realm?0x437B80:0x536784));
-    Ellipse(p.x,p.y-45,24,42,C(0x70DBC9,.12f)); Ring(p.x,p.y-45,25,42,3,C(0x70DBC9,.8f));
-    Ring(p.x,p.y-45,31,49,1,C(0xC3A5EE,.4f));
-    for(int i=0;i<5;++i) { float a=float(view->time*.6+i*1.3); draw->Circle(p.x+std::cos(a)*26,p.y-45+std::sin(a)*43,2,C(0xD2FFF0)); }
+    Ellipse(p.x,p.y-45,24,42,C(0x70DBC9,.12f));
+    Ring(p.x,p.y-45,25,42,3,C(0x70DBC9,.8f).Emissive(2.2f));
+    Ring(p.x,p.y-45,31,49,1,C(0xC3A5EE,.4f).Emissive(1.0f));
+    for(int i=0;i<5;++i) { float a=float(view->time*.6+i*1.3); draw->Circle(p.x+std::cos(a)*26,p.y-45+std::sin(a)*43,2,C(0xD2FFF0).Emissive(2.5f)); }
     Label(p.x-37,p.y+13,game->realm?L"도시로 연결":L"LUMIA 접속",12,C(0xA7E5DD));
 }
 void Cafe() {
@@ -156,7 +162,7 @@ void DiscoveryMarker(int cx,int cy) {
     Vec2 p=Iso(x,y); bool found=game->HasDiscovery(game->realm,cx,cy);
     Box(x,y,.45,.45,16,C(found?0x47697B:(game->realm?0x547F89:0x87776F)));
     Ring(p.x,p.y-27,12,5,1,C(found?0x9CAEB9:0xE7C68C,.8f));
-    draw->Circle(p.x,p.y-31+float(std::sin(view->time*2)*3),3,C(found?0x9CAEB9:0xFFE5AA));
+    draw->Circle(p.x,p.y-31+float(std::sin(view->time*2)*3),3,C(found?0x9CAEB9:0xFFE5AA).Emissive(found?.35f:2.0f));
     if(Distance(game->x,game->y,x,y)<2.4) Label(p.x-68,p.y+17,found?L"발견한 기억 보관함":L"[E] 이름 없는 기록",13,C(0xECD8B0));
 }
 void World() {
@@ -315,6 +321,7 @@ void Hud() {
         Label(420,444,view->helpOpen?L"R   루미아에서 사망·탄생을 체험":L"새 지역은 이어지고, 지나온 선택은 남습니다.",16,C(0xAEC7CE));
         Label(420,490,view->helpOpen?L"B   방송 시작·종료     J   기록":L"“네가 가고 싶은 곳부터 가자.”",16,C(0xAEC7CE));
         Label(420,548,view->helpOpen?L"F5   저장     F1   도움말     ESC   닫기·종료":L"지금의 행동이 다음 생명의 성향이 됩니다.",15,C(0xCDBDAA));
+        if(view->helpOpen) Label(420,588,L"F2 후처리 전체   F3 블룸   F4 비넷   F6 가장자리 블러",14,C(0xA4C4CB));
         Label(420,640,L"[ESC] 여정으로 돌아가기",14,C(0x7FA99F));
     }
 }
@@ -327,6 +334,8 @@ bool IsBlocked(double x,double y,int realm) {
 }
 void Render(Renderer& renderer,const echo::GameState& state,const View& currentView) {
     draw=&renderer; game=&state; view=&currentView;
-    World(); Hud();
+    World();
+    renderer.BeginOverlay();
+    Hud();
 }
 }

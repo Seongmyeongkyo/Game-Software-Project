@@ -49,9 +49,11 @@ Renderer::Renderer(int width, int height)
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
+    glEnableVertexAttribArray(3);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, x)));
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, u)));
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, r)));
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, emission)));
     const unsigned char white[] = {255, 255, 255, 255};
     glGenTextures(1, &m_WhiteTexture);
     glBindTexture(GL_TEXTURE_2D, m_WhiteTexture);
@@ -62,13 +64,18 @@ Renderer::Renderer(int width, int height)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glUseProgram(m_Program);
     glUniform1i(glGetUniformLocation(m_Program, "u_Texture"), 0);
+    m_LinearSceneUniform = glGetUniformLocation(m_Program, "u_LinearScene");
     m_Vertices.reserve(24576);
     m_Initialized = m_VertexArray != 0 && m_VertexBuffer != 0 && m_WhiteTexture != 0;
+    m_PostProcess.reset(new PostProcess());
+    if (!m_PostProcess->Initialize())
+        std::cerr << "Post-processing is unavailable; using direct rendering." << std::endl;
     Resize(width, height);
 }
 
 Renderer::~Renderer()
 {
+    m_PostProcess.reset();
     ClearTextCache();
     if (m_WhiteTexture) glDeleteTextures(1, &m_WhiteTexture);
     if (m_VertexBuffer) glDeleteBuffers(1, &m_VertexBuffer);
@@ -83,15 +90,20 @@ GLuint Renderer::CompileProgram()
         "layout(location=0) in vec2 a_Position;\n"
         "layout(location=1) in vec2 a_UV;\n"
         "layout(location=2) in vec4 a_Color;\n"
-        "out vec2 v_UV; out vec4 v_Color;\n"
-        "void main(){ v_UV=a_UV; v_Color=a_Color;"
+        "layout(location=3) in float a_Emission;\n"
+        "out vec2 v_UV; out vec4 v_Color; out float v_Emission;\n"
+        "void main(){ v_UV=a_UV; v_Color=a_Color; v_Emission=a_Emission;"
         "gl_Position=vec4(a_Position.x/720.0-1.0,1.0-a_Position.y/450.0,0.0,1.0); }\n";
     const char* fragmentSource =
         "#version 330 core\n"
-        "in vec2 v_UV; in vec4 v_Color;\n"
+        "in vec2 v_UV; in vec4 v_Color; in float v_Emission;\n"
         "uniform sampler2D u_Texture;\n"
+        "uniform bool u_LinearScene;\n"
         "out vec4 FragColor;\n"
-        "void main(){ FragColor=v_Color*texture(u_Texture,v_UV); }\n";
+        "vec3 linearize(vec3 c){ return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),c)); }\n"
+        "void main(){ vec4 c=v_Color*texture(u_Texture,v_UV);"
+        "if(u_LinearScene) c.rgb=linearize(clamp(c.rgb,0.0,1.0))*(1.0+max(v_Emission,0.0));"
+        "FragColor=c; }\n";
     GLuint vertex = MakeShader(GL_VERTEX_SHADER, vertexSource);
     GLuint fragment = MakeShader(GL_FRAGMENT_SHADER, fragmentSource);
     if (!vertex || !fragment)
@@ -134,6 +146,7 @@ void Renderer::Resize(int width, int height)
     m_ViewportHeight = std::max(1, static_cast<int>(std::round(CanvasHeight * scale)));
     m_ViewportX = (m_WindowWidth - m_ViewportWidth) / 2;
     m_ViewportY = (m_WindowHeight - m_ViewportHeight) / 2;
+    if (m_PostProcess) m_PostProcess->Resize(m_ViewportWidth, m_ViewportHeight);
     glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
 }
 
@@ -142,22 +155,55 @@ void Renderer::BeginFrame(Color background)
     if (!m_Initialized) return;
     m_Vertices.clear();
     m_BatchTexture = m_WhiteTexture;
+    m_InOverlay = false;
+    m_SceneOffscreen = false;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_FRAMEBUFFER_SRGB);
     glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glClearColor(background.r, background.g, background.b, background.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
+    if (m_PostProcess && m_PostProcess->BeginScene()) {
+        m_SceneOffscreen = true;
+        // BeginScene selected the full offscreen viewport. Clear in linear space.
+        auto linearize = [](float c) { return c <= .04045f ? c / 12.92f : std::pow((c + .055f) / 1.055f, 2.4f); };
+        glClearColor(linearize(background.r), linearize(background.g), linearize(background.b), background.a);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
+    else
+        glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glUseProgram(m_Program);
+    glUniform1i(m_LinearSceneUniform, m_SceneOffscreen ? 1 : 0);
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(m_VertexArray);
+}
+
+void Renderer::BeginOverlay()
+{
+    if (!m_Initialized || m_InOverlay) return;
+    Flush();
+    if (m_SceneOffscreen)
+        m_PostProcess->Composite(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight, m_PostSettings);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(m_ViewportX, m_ViewportY, m_ViewportWidth, m_ViewportHeight);
+    glDisable(GL_FRAMEBUFFER_SRGB);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(m_Program);
+    glUniform1i(m_LinearSceneUniform, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(m_VertexArray);
+    m_BatchTexture = m_WhiteTexture;
+    m_InOverlay = true;
 }
 
 void Renderer::EndFrame()
 {
     if (!m_Initialized) return;
+    BeginOverlay();
     Flush();
     glBindVertexArray(0);
     glUseProgram(0);
@@ -184,9 +230,9 @@ void Renderer::UseTexture(GLuint texture)
 
 void Renderer::Triangle(Vec2 a, Vec2 b, Vec2 c, Color color)
 {
-    m_Vertices.push_back({a.x, a.y, .5f, .5f, color.r, color.g, color.b, color.a});
-    m_Vertices.push_back({b.x, b.y, .5f, .5f, color.r, color.g, color.b, color.a});
-    m_Vertices.push_back({c.x, c.y, .5f, .5f, color.r, color.g, color.b, color.a});
+    m_Vertices.push_back({a.x, a.y, .5f, .5f, color.r, color.g, color.b, color.a, color.emission});
+    m_Vertices.push_back({b.x, b.y, .5f, .5f, color.r, color.g, color.b, color.a, color.emission});
+    m_Vertices.push_back({c.x, c.y, .5f, .5f, color.r, color.g, color.b, color.a, color.emission});
 }
 
 void Renderer::Polygon(const std::vector<Vec2>& vertices, Color color)

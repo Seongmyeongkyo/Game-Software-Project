@@ -6,13 +6,21 @@
 #include <vector>
 #include <map>
 #include <tuple>
+#include <memory>
+#include "PostProcess.h"
 #include "Dependencies/glew.h"
 
 struct Color
 {
     float r, g, b, a;
+    float emission = 0;
     Color(float red = 1, float green = 1, float blue = 1, float alpha = 1)
         : r(red), g(green), b(blue), a(alpha) {}
+    Color Emissive(float intensity) const {
+        Color color = *this;
+        color.emission = intensity;
+        return color;
+    }
 };
 struct Vec2
 {
@@ -31,7 +39,11 @@ public:
     bool IsInitialized() const { return m_Initialized; }
     void Resize(int width, int height);
     void BeginFrame(Color background);
+    // Composite the world before drawing screen-space text and HUD.
+    void BeginOverlay();
     void EndFrame();
+    PostProcessSettings& PostProcessing() { return m_PostSettings; }
+    const PostProcessSettings& PostProcessing() const { return m_PostSettings; }
     void Polygon(const std::vector<Vec2>& vertices, Color color);
     void Rect(float x, float y, float width, float height, Color color);
     void RoundedRect(float x, float y, float width, float height, float radius, Color color);
@@ -41,7 +53,7 @@ public:
     void DrawSolidRect(float x, float y, float z, float size, float r, float g, float b, float a);
 
 private:
-    struct Vertex { float x, y, u, v, r, g, b, a; };
+    struct Vertex { float x, y, u, v, r, g, b, a, emission; };
     struct TextTexture { GLuint texture; int width, height; };
     GLuint CompileProgram();
     void Flush();
@@ -56,6 +68,10 @@ private:
     int m_ViewportX = 0, m_ViewportY = 0, m_ViewportWidth = 1, m_ViewportHeight = 1;
     GLuint m_Program = 0, m_VertexArray = 0, m_VertexBuffer = 0;
     GLuint m_WhiteTexture = 0, m_BatchTexture = 0;
+    GLint m_LinearSceneUniform = -1;
+    bool m_InOverlay = false, m_SceneOffscreen = false;
+    PostProcessSettings m_PostSettings;
+    std::unique_ptr<PostProcess> m_PostProcess;
     std::vector<Vertex> m_Vertices;
     std::map<std::tuple<std::wstring, int, int>, TextTexture> m_TextCache;
 };

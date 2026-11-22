@@ -167,6 +167,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="PostProcess.h" />
     <ClInclude Include="GameState.h" />
     <ClInclude Include="PrototypeScene.h" />
     <ClInclude Include="stdafx.h" />
@@ -174,6 +175,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="PostProcess.cpp" />
     <ClCompile Include="GameState.cpp" />
     <ClCompile Include="PrototypeScene.cpp" />
     <ClCompile Include="SimpleGame.cpp" />
