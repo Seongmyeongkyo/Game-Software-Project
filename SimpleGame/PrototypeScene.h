@@ -1,6 +1,7 @@
 #pragma once
 #include "Renderer.h"
 #include "GameState.h"
+#include "Dialogue.h"
 #include <string>
 
 namespace prototype
@@ -16,7 +17,7 @@ namespace prototype
         bool journalOpen = false;
         bool helpOpen = false;
         bool guarding = false;
-        std::wstring dialogue;
+        narrative::DialogueState dialogue;
     };
 
     void Render(Renderer& renderer, const echo::GameState& state, const View& view);

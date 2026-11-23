@@ -7,6 +7,7 @@
 #include <map>
 #include <tuple>
 #include <memory>
+#include <cstdint>
 #include "PostProcess.h"
 #include "Dependencies/glew.h"
 
@@ -87,6 +88,14 @@ public:
               float pixels,
               Color color,
               int weight = 400);
+    bool Image(const std::wstring& relativePath,
+               float x,
+               float y,
+               float width,
+               float height,
+               Color tint = Color(),
+               bool cover = false,
+               bool mirror = false);
     void DrawSolidRect(float x, float y, float z, float size, float r, float g, float b, float a);
 
 private:
@@ -116,7 +125,9 @@ private:
     void Triangle(Vec2 a, Vec2 b, Vec2 c, Color color);
     void TexturedRect(float x, float y, float width, float height, Color color);
     TextTexture CreateTextTexture(const std::wstring& text, int pixels, int weight);
+    TextTexture CreateImageTexture(const std::wstring& relativePath);
     void ClearTextCache();
+    void ClearImageCache();
 
     bool m_Initialized = false;
     int m_WindowWidth = 1;
@@ -137,4 +148,6 @@ private:
     std::unique_ptr<PostProcess> m_PostProcess;
     std::vector<Vertex> m_Vertices;
     std::map<std::tuple<std::wstring, int, int>, TextTexture> m_TextCache;
+    std::map<std::wstring, TextTexture> m_ImageCache;
+    uintptr_t m_ImageDecoderToken = 0;
 };

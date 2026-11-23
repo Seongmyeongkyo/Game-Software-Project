@@ -47,6 +47,7 @@ namespace
     bool shiftPressed = false;
     bool captureMode = false;
     bool shuttingDown = false;
+    bool firstEchoSceneShown = false;
     int captureRealm = 0;
     int captureFrames = 0;
     int resultCode = 0;
@@ -195,12 +196,43 @@ namespace
         return view.dialogueOpen || view.journalOpen || view.helpOpen;
     }
 
-    void OpenDialogue(const std::wstring& text)
+    void OpenDialogue(const std::wstring& text,
+                      narrative::Speaker speaker = narrative::Speaker::Narrator,
+                      narrative::StoryMoment moment = narrative::StoryMoment::None)
     {
-        view.dialogue = text;
+        if (moment == narrative::StoryMoment::FirstEcho)
+        {
+            if (firstEchoSceneShown)
+            {
+                moment = narrative::StoryMoment::None;
+            }
+            firstEchoSceneShown = true;
+        }
+        std::wstring content = text;
+        const std::wstring prefix = speaker == narrative::Speaker::Sea ? L"세아: " : L"유실체: ";
+        if ((speaker == narrative::Speaker::Sea || speaker == narrative::Speaker::Echo)
+            && content.compare(0, prefix.size(), prefix) == 0)
+        {
+            content.erase(0, prefix.size());
+        }
+        view.dialogue.Begin(content, speaker, moment);
+        view.dialogue.choicesAvailable =
+            speaker == narrative::Speaker::Sea || speaker == narrative::Speaker::Echo;
         view.dialogueOpen = true;
         view.journalOpen = false;
         view.helpOpen = false;
+    }
+
+    void AdvanceDialogue()
+    {
+        if (!view.dialogue.Complete() || view.dialogue.CinematicActive())
+        {
+            view.dialogue.RevealAll();
+        }
+        else if (!view.dialogue.Advance())
+        {
+            view.dialogueOpen = false;
+        }
     }
 
     void EnsureWalkablePosition()
@@ -242,7 +274,7 @@ namespace
     {
         if (view.dialogueOpen)
         {
-            view.dialogueOpen = false;
+            AdvanceDialogue();
             return;
         }
         if (state->realm == 0 && Distance(state->x, state->y, 1.0, -1.3) < 2.2)
@@ -250,17 +282,20 @@ namespace
             if (state->deaths > 0)
             {
                 OpenDialogue(
-                    L"세아: 돌아왔구나. 오늘은 내가 기다릴게.\n늘 먹던 걸로 할까? 천천히 이야기해도 돼.");
+                    L"세아: 돌아왔구나. 오늘은 내가 기다릴게.\n늘 먹던 걸로 할까? 천천히 이야기해도 돼.",
+                    narrative::Speaker::Sea);
             }
             else if (state->broadcasting)
             {
                 OpenDialogue(
-                    L"세아: 시청자보다 네가 먼저 웃어야지!\n오늘도 같이 갈까? 길을 잃어도 방송은 되잖아.");
+                    L"세아: 시청자보다 네가 먼저 웃어야지!\n오늘도 같이 갈까? 길을 잃어도 방송은 되잖아.",
+                    narrative::Speaker::Sea);
             }
             else
             {
                 OpenDialogue(
-                    L"세아: 또 접속하러 가? 도시도 꽤 재밌는데.\n돌아오면 이야기해 줘. 늘 먹던 걸로 준비할게.");
+                    L"세아: 또 접속하러 가? 도시도 꽤 재밌는데.\n돌아오면 이야기해 줘. 늘 먹던 걸로 준비할게.",
+                    narrative::Speaker::Sea);
             }
             return;
         }
@@ -283,17 +318,23 @@ namespace
                     && nearest->protection >= nearest->curiosity)
                 {
                     OpenDialogue(
-                        L"유실체: 위험한 길이면 내가 먼저 가볼게.\n그런데... 오늘은 저 빛나는 숲에 가보고 싶어.");
+                        L"유실체: 위험한 길이면 내가 먼저 가볼게.\n그런데... 오늘은 저 빛나는 숲에 가보고 싶어.",
+                        narrative::Speaker::Echo,
+                        narrative::StoryMoment::FirstEcho);
                 }
                 else if (nearest->aggression >= nearest->curiosity)
                 {
                     OpenDialogue(
-                        L"유실체: 앞을 막으면 뚫으면 되는 줄 알았어.\n잠깐 멈춰도 괜찮다는 건, 이제 배우는 중이야.");
+                        L"유실체: 앞을 막으면 뚫으면 되는 줄 알았어.\n잠깐 멈춰도 괜찮다는 건, 이제 배우는 중이야.",
+                        narrative::Speaker::Echo,
+                        narrative::StoryMoment::FirstEcho);
                 }
                 else
                 {
                     OpenDialogue(
-                        L"유실체: 저 길 끝에는 뭐가 있을까?\n네게서 시작했지만, 내가 고른 길도 걷고 싶어.");
+                        L"유실체: 저 길 끝에는 뭐가 있을까?\n네게서 시작했지만, 내가 고른 길도 걷고 싶어.",
+                        narrative::Speaker::Echo,
+                        narrative::StoryMoment::FirstEcho);
                 }
                 return;
             }
@@ -334,7 +375,9 @@ namespace
                 OpenDialogue(
                     fresh
                         ? L"이름 없는 잔향이 조용히 빛난다.\n처음 온 장소인데, 누군가 나를 기다린 것 같다."
-                        : L"이 장소는 네가 남긴 발견을 기억하고 있다.\n잔향은 여전히 같은 자리에서 빛난다.");
+                        : L"이 장소는 네가 남긴 발견을 기억하고 있다.\n잔향은 여전히 같은 자리에서 빛난다.",
+                    narrative::Speaker::Narrator,
+                    fresh ? narrative::StoryMoment::MemoryDiscovery : narrative::StoryMoment::None);
             }
             return;
         }
@@ -383,6 +426,13 @@ namespace
         case 'e':
             Interact();
             break;
+        case ' ':
+        case '\r':
+            if (view.dialogueOpen)
+            {
+                AdvanceDialogue();
+            }
+            break;
         case 'q':
             if (!PanelOpen())
             {
@@ -400,8 +450,16 @@ namespace
         case 'r':
             if (!PanelOpen() && state->realm == 1)
             {
+                const int previousDeaths = state->deaths;
                 state->Die();
                 view.deathFlash = 1.0f;
+                if (state->deaths > previousDeaths && !firstEchoSceneShown)
+                {
+                    OpenDialogue(
+                        L"하나의 끝에서, 또 하나의 시작이 태어납니다.\n당신이 남긴 감정이 새로운 생명의 첫 표정이 됩니다.",
+                        narrative::Speaker::Narrator,
+                        narrative::StoryMoment::FirstEcho);
+                }
             }
             else if (state->realm == 0)
             {
@@ -423,15 +481,26 @@ namespace
             view.dialogueOpen = view.helpOpen = false;
             break;
         case '1':
-            if (view.dialogueOpen)
+            if (view.dialogueOpen && (!view.dialogue.Complete() || view.dialogue.CinematicActive()))
+            {
+                view.dialogue.RevealAll();
+            }
+            else if (view.dialogueOpen && view.dialogue.choicesAvailable
+                     && !view.dialogue.HasNextPage())
             {
                 state->Act(true);
-                view.dialogue =
-                    L"“오늘은 네가 가고 싶은 데부터 가자.”\n함께 걷겠다는 선택이 보호 성향으로 기록되었다.";
+                OpenDialogue(
+                    L"오늘은 네가 가고 싶은 데부터 가자.\n함께 걷다 보면, 네가 좋아하는 것도 알게 되겠지.",
+                    narrative::Speaker::Player);
             }
             break;
         case '2':
-            if (view.dialogueOpen)
+            if (view.dialogueOpen && (!view.dialogue.Complete() || view.dialogue.CinematicActive()))
+            {
+                view.dialogue.RevealAll();
+            }
+            else if (view.dialogueOpen && view.dialogue.choicesAvailable
+                     && !view.dialogue.HasNextPage())
             {
                 state->curiosity += 0.08f;
                 const float total = state->protection + state->aggression + state->curiosity;
@@ -440,8 +509,9 @@ namespace
                 state->curiosity /= total;
                 state->message = L"관찰하는 선택을 기록했습니다 · 탐험 성향이 조금 자랍니다.";
                 state->Save();
-                view.dialogue =
-                    L"서두르지 않고 주변과 상대의 표정을 살핀다.\n말보다 오래 남는 작은 변화가 있을지도 모른다.";
+                OpenDialogue(
+                    L"조금만 더, 네 이야기를 듣고 싶어.\n말하지 않아도 괜찮아. 서두르지 않을게.",
+                    narrative::Speaker::Player);
             }
             break;
         default:
@@ -561,6 +631,10 @@ namespace
         else
         {
             view.time += dt;
+            if (view.dialogueOpen)
+            {
+                view.dialogue.Tick(dt);
+            }
             float moveX = 0.0f;
             float moveY = 0.0f;
             if (!PanelOpen())
@@ -604,10 +678,25 @@ namespace
             if (!PanelOpen() && state->realm == 1)
             {
                 const int previousDeaths = state->deaths;
+                const int previousBosses = state->combat.growth.bosses;
                 state->UpdateCombat(dt, view.guarding);
                 if (state->deaths > previousDeaths)
                 {
                     view.deathFlash = 1.0f;
+                    if (!firstEchoSceneShown)
+                    {
+                        OpenDialogue(
+                            L"하나의 죽음은 하나의 생명을 만듭니다.\n끝난 줄 알았던 이야기가, 다른 목소리로 이어집니다.",
+                            narrative::Speaker::Narrator,
+                            narrative::StoryMoment::FirstEcho);
+                    }
+                }
+                else if (state->combat.growth.bosses > previousBosses)
+                {
+                    OpenDialogue(
+                        L"송신이 멈춘 자리에도, 누군가의 마지막 인사는 남아 있습니다.\n우리가 기억하는 동안, 그 목소리는 어디로 가는 걸까요?",
+                        narrative::Speaker::Narrator,
+                        narrative::StoryMoment::BossResolved);
                 }
             }
             const double smoothing = 1.0 - std::exp(-7.0 * dt);

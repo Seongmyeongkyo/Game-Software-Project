@@ -172,6 +172,7 @@
     <ClInclude Include="Combat.h" />
     <ClInclude Include="CombatVisuals.h" />
     <ClInclude Include="PrototypeScene.h" />
+    <ClInclude Include="Dialogue.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
@@ -182,6 +183,7 @@
     <ClCompile Include="Combat.cpp" />
     <ClCompile Include="CombatVisuals.cpp" />
     <ClCompile Include="PrototypeScene.cpp" />
+    <ClCompile Include="Dialogue.cpp" />
     <ClCompile Include="SimpleGame.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -193,11 +195,19 @@
   <ItemGroup>
     <None Include="Shaders\SolidRect.fs" />
     <None Include="Shaders\SolidRect.vs" />
+    <None Include="Assets\Dialogue\*.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyPrototypeRuntimeLibraries" AfterTargets="Build">
     <Copy SourceFiles="$(PrototypeRuntimeDirectory)freeglut.dll;$(PrototypeRuntimeDirectory)glew32.dll"
           DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDialogueAssets" AfterTargets="Build">
+    <ItemGroup>
+      <DialogueAssets Include="$(ProjectDir)Assets\Dialogue\*.png" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DialogueAssets)" DestinationFolder="$(OutDir)Assets\Dialogue"
+          SkipUnchangedFiles="true" Condition="'@(DialogueAssets)'!=''" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

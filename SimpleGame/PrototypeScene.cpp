@@ -247,6 +247,144 @@ namespace prototype
             Label(x + 39, y + 3, name, 13, C(0x9FB3C0));
         }
 
+        void PlayerAvatar(Vec2 p, Color coat)
+        {
+            const Color skin = C(0xF0C4AA);
+            const Color hair = C(0x8A4B3E);
+            const float bottom = p.y;
+
+            draw->Line(Vec2(p.x - 4, bottom - 17), Vec2(p.x - 6, bottom - 2), 5, C(0x39434B));
+            draw->Line(Vec2(p.x + 4, bottom - 17), Vec2(p.x + 6, bottom - 2), 5, C(0x303A43));
+            draw->RoundedRect(p.x - 10, bottom - 4, 9, 5, 2, C(0xE1D7C6));
+            draw->RoundedRect(p.x + 3, bottom - 4, 9, 5, 2, C(0xD4CBBE));
+            Poly({Vec2(p.x - 10, bottom - 32),
+                  Vec2(p.x + 9, bottom - 32),
+                  Vec2(p.x + 8, bottom - 22),
+                  Vec2(p.x + 11, bottom - 10),
+                  Vec2(p.x - 10, bottom - 10),
+                  Vec2(p.x - 8, bottom - 22)},
+                 coat);
+            Poly({Vec2(p.x - 3, bottom - 32),
+                  Vec2(p.x + 4, bottom - 32),
+                  Vec2(p.x + 5, bottom - 11),
+                  Vec2(p.x - 3, bottom - 11)},
+                 C(0x29384D));
+            draw->Line(Vec2(p.x - 10, bottom - 29),
+                       Vec2(p.x - 14, bottom - 16),
+                       5,
+                       Tint(coat, .84f));
+            draw->Line(Vec2(p.x + 10, bottom - 29), Vec2(p.x + 14, bottom - 16), 5, coat);
+            draw->Line(Vec2(p.x - 10, bottom - 29), Vec2(p.x - 12, bottom - 23), 5, C(0xF1E4CE));
+            draw->Circle(p.x - 14, bottom - 13.5f, 2.5f, skin);
+            draw->Circle(p.x + 14, bottom - 13.5f, 2.5f, skin);
+            draw->RoundedRect(p.x + 12, bottom - 18, 4, 2, 1, C(0xE4C29A));
+            draw->Line(Vec2(p.x - 7, bottom - 32), Vec2(p.x + 6, bottom - 15), 2, C(0x354356));
+            draw->RoundedRect(p.x + 3, bottom - 20, 6, 7, 1.5f, C(0x28374C));
+            draw->Rect(p.x + 5, bottom - 18, 2, 1, C(0xE4BA66));
+            draw->Rect(p.x - 2, bottom - 35, 5, 5, skin);
+
+            Poly({Vec2(p.x - 10, bottom - 52),
+                  Vec2(p.x - 15, bottom - 49),
+                  Vec2(p.x - 16, bottom - 42),
+                  Vec2(p.x - 13, bottom - 36),
+                  Vec2(p.x - 8, bottom - 32),
+                  Vec2(p.x - 10, bottom - 41),
+                  Vec2(p.x - 7, bottom - 48)},
+                 Tint(hair, .85f));
+            Ellipse(p.x, bottom - 43, 11.5f, 10.5f, hair);
+            Poly({Vec2(p.x - 11, bottom - 45),
+                  Vec2(p.x - 11, bottom - 37),
+                  Vec2(p.x - 7, bottom - 35),
+                  Vec2(p.x - 5, bottom - 43)},
+                 hair);
+            Poly({Vec2(p.x + 7, bottom - 46),
+                  Vec2(p.x + 12, bottom - 42),
+                  Vec2(p.x + 10, bottom - 36),
+                  Vec2(p.x + 6, bottom - 38)},
+                 Tint(hair, .88f));
+            draw->Circle(p.x, bottom - 42, 9, skin);
+            Poly({Vec2(p.x - 11, bottom - 44),
+                  Vec2(p.x - 8, bottom - 52),
+                  Vec2(p.x + 3, bottom - 54),
+                  Vec2(p.x + 11, bottom - 47),
+                  Vec2(p.x + 7, bottom - 44),
+                  Vec2(p.x + 3, bottom - 48),
+                  Vec2(p.x - 3, bottom - 41),
+                  Vec2(p.x - 2, bottom - 47),
+                  Vec2(p.x - 8, bottom - 38)},
+                 hair);
+            draw->Line(Vec2(p.x - 7, bottom - 48), Vec2(p.x - 4, bottom - 50), 1, C(0xBC8058));
+            draw->Line(Vec2(p.x - 8, bottom - 51), Vec2(p.x - 11, bottom - 50), 1.5f, C(0xEAC36E));
+            draw->Line(Vec2(p.x - 11, bottom - 50), Vec2(p.x - 11, bottom - 47), 1.5f, C(0xEAC36E));
+            draw->Line(Vec2(p.x - 11, bottom - 47), Vec2(p.x - 8, bottom - 46), 1.5f, C(0xEAC36E));
+            draw->Rect(p.x + 4, bottom - 44, 2, 2, C(0x493B33));
+            draw->Line(Vec2(p.x + 3, bottom - 37), Vec2(p.x + 6, bottom - 38), 1, C(0xAF7665));
+            draw->Line(Vec2(p.x - 5, bottom - 33), Vec2(p.x, bottom - 29), 2, Tint(coat, .85f));
+            draw->Line(Vec2(p.x + 5, bottom - 33), Vec2(p.x, bottom - 29), 2, coat);
+            draw->Line(Vec2(p.x + 3, bottom - 26), Vec2(p.x + 3, bottom - 22), 1, C(0xD5937A));
+        }
+
+        void SeaAvatar(Vec2 p)
+        {
+            const Color skin = C(0xF0C4AA);
+            const Color hair = C(0x26344E);
+            const Color jacket = C(0x303B53);
+            const Color lime = C(0xC5D86F);
+            const float bottom = p.y;
+
+            Ellipse(p.x, p.y + 3, 15, 6, C(0x020A14, .5f));
+            draw->Line(Vec2(p.x - 4, bottom - 17), Vec2(p.x - 6, bottom - 1), 5, C(0x283346));
+            draw->Line(Vec2(p.x + 4, bottom - 17), Vec2(p.x + 6, bottom - 1), 5, C(0x232F42));
+            draw->RoundedRect(p.x - 10, bottom - 3, 9, 4, 1.5f, C(0xD9DED1));
+            draw->RoundedRect(p.x + 3, bottom - 3, 9, 4, 1.5f, C(0xCAD2CA));
+            Poly({Vec2(p.x - 11, bottom - 32),
+                  Vec2(p.x + 10, bottom - 32),
+                  Vec2(p.x + 12, bottom - 11),
+                  Vec2(p.x - 12, bottom - 11)},
+                 jacket);
+            Poly({Vec2(p.x - 4, bottom - 32),
+                  Vec2(p.x + 4, bottom - 32),
+                  Vec2(p.x + 5, bottom - 12),
+                  Vec2(p.x - 4, bottom - 12)},
+                 C(0xADA0C0));
+            draw->Line(Vec2(p.x - 10, bottom - 29), Vec2(p.x - 14, bottom - 15), 6, jacket);
+            draw->Line(Vec2(p.x + 10, bottom - 29), Vec2(p.x + 14, bottom - 15), 6, jacket);
+            draw->Line(Vec2(p.x + 10, bottom - 29), Vec2(p.x + 12, bottom - 23), 6, lime);
+            draw->Line(Vec2(p.x - 10, bottom - 24), Vec2(p.x - 12, bottom - 20), 2, lime);
+            draw->Circle(p.x - 14, bottom - 13, 2.5f, skin);
+            draw->Circle(p.x + 14, bottom - 13, 2.5f, skin);
+            draw->Circle(p.x - 7, bottom - 26, 2, lime);
+            draw->Rect(p.x - 2, bottom - 35, 5, 5, skin);
+
+            Ellipse(p.x, bottom - 43, 11.5f, 10.5f, hair);
+            Poly({Vec2(p.x + 6, bottom - 46),
+                  Vec2(p.x + 12, bottom - 42),
+                  Vec2(p.x + 10, bottom - 37),
+                  Vec2(p.x + 13, bottom - 35),
+                  Vec2(p.x + 7, bottom - 32),
+                  Vec2(p.x + 1, bottom - 35)},
+                 hair);
+            draw->Circle(p.x, bottom - 42, 9, skin);
+            Poly({Vec2(p.x - 11, bottom - 44),
+                  Vec2(p.x - 10, bottom - 50),
+                  Vec2(p.x - 3, bottom - 54),
+                  Vec2(p.x + 8, bottom - 52),
+                  Vec2(p.x + 12, bottom - 44),
+                  Vec2(p.x + 7, bottom - 45),
+                  Vec2(p.x + 4, bottom - 48),
+                  Vec2(p.x + 2, bottom - 41),
+                  Vec2(p.x - 3, bottom - 48),
+                  Vec2(p.x - 7, bottom - 43)},
+                 hair);
+            draw->Line(Vec2(p.x + 2, bottom - 51), Vec2(p.x, bottom - 45), 2.5f, lime);
+            draw->Rect(p.x - 5, bottom - 44, 2, 2, C(0x574936));
+            draw->Line(Vec2(p.x - 6, bottom - 37), Vec2(p.x - 3, bottom - 37), 1, C(0xAD7666));
+            draw->Circle(p.x + 7, bottom - 42, 3, C(0xE9EADF));
+            draw->Circle(p.x + 7, bottom - 42, 1.3f, C(0x778693));
+            draw->Line(Vec2(p.x + 8, bottom - 40), Vec2(p.x + 5, bottom - 36), 1, C(0xDCE0D6));
+            draw->Line(Vec2(p.x + 5, bottom - 36), Vec2(p.x, bottom - 36), 1, C(0xDCE0D6));
+        }
+
         void Character(double x, double y, Color coat, bool player, bool spirit = false, int id = 0)
         {
             Vec2 p = Iso(x, y);
@@ -255,6 +393,8 @@ namespace prototype
             if (player)
             {
                 Ring(p.x, p.y + 3, 19, 8, 2, C(0x83F3DE, .7f).Emissive(.65f));
+                PlayerAvatar(p, coat);
+                return;
             }
             if (spirit)
             {
@@ -672,7 +812,7 @@ namespace prototype
                     Cafe();
                     break;
                 case 6:
-                    Character(object.x, object.y, C(0xAE91BF), false);
+                    SeaAvatar(p);
                     Label(p.x - 13, p.y - 78, L"세아", 14, C(0xE6D5EE));
                     if (Distance(game->x, game->y, 1, -1.3) < 2)
                     {
@@ -680,7 +820,7 @@ namespace prototype
                     }
                     break;
                 case 7:
-                    Character(object.x, object.y, C(0x548EA2), true);
+                    Character(object.x, object.y, C(0xD78376), true);
                     if (view->guarding)
                     {
                         Ring(p.x, p.y - 21, 25, 31, 2, C(0x96EACB, .7f).Emissive(.6f));
@@ -944,27 +1084,7 @@ namespace prototype
             }
             if (view->dialogueOpen)
             {
-                draw->Rect(0, 540, 1440, 360, C(0x020B15, .36f));
-                Panel(320, 583, 800, 217, .98f);
-                Label(348,
-                      603,
-                      game->realm ? L"이름을 기다리는 생명" : L"세아  /  동료 스트리머",
-                      15,
-                      accent,
-                      600);
-                std::wistringstream lines(view->dialogue);
-                std::wstring line;
-                float yy = 645;
-                while (std::getline(lines, line))
-                {
-                    Label(348, yy, line, 18, C(0xE1E9EB));
-                    yy += 30;
-                }
-                Label(348,
-                      762,
-                      L"[1] 함께할게   [2] 조금 더 지켜본다   [E / ESC] 대화 마치기",
-                      12,
-                      C(0x90ADBC));
+                narrative::Draw(*draw, view->dialogue, view->time);
             }
             if (view->journalOpen || view->helpOpen)
             {

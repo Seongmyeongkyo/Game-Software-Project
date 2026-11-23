@@ -42,6 +42,9 @@
     <ClInclude Include="PrototypeScene.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="Dialogue.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -68,6 +71,9 @@
     <ClCompile Include="PrototypeScene.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Dialogue.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\SolidRect.fs">
@@ -75,6 +81,9 @@
     </None>
     <None Include="Shaders\SolidRect.vs">
       <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Assets\Dialogue\*.png">
+      <Filter>리소스 파일</Filter>
     </None>
   </ItemGroup>
 </Project>
