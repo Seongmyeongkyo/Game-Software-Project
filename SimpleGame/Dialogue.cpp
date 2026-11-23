@@ -582,6 +582,11 @@ namespace narrative
         return m_Pages[m_Page].substr(0, m_ClusterEnds[m_Revealed - 1]);
     }
 
+    std::wstring DialogueState::PageText() const
+    {
+        return m_Page < m_Pages.size() ? m_Pages[m_Page] : std::wstring();
+    }
+
     bool DialogueState::CinematicActive() const
     {
         return moment != StoryMoment::None && cinematicElapsed < CinematicDuration();
@@ -680,13 +685,18 @@ namespace narrative
                       accent,
                       600);
         renderer.Rect(329, panelY + 48, 780, 1, C(0x7091A2, .2f * arrival));
-        std::wistringstream lines(state.VisibleText());
+        const size_t visibleCharacters = state.VisibleText().size();
+        std::wistringstream lines(state.PageText());
         std::wstring line;
         float lineY = panelY + 65;
+        size_t offset = 0;
 
         while (std::getline(lines, line))
         {
-            renderer.Text(329, lineY, line, 20, C(0xE4EEEE, arrival));
+            const size_t revealed =
+                visibleCharacters > offset ? std::min(line.size(), visibleCharacters - offset) : 0;
+            renderer.Text(329, lineY, line, 20, C(0xE4EEEE, arrival), 400, revealed);
+            offset += line.size() + 1;
             lineY += 29;
         }
 

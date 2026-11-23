@@ -50,6 +50,7 @@ namespace narrative
         bool HasNextPage() const;
         bool Advance();
         std::wstring VisibleText() const;
+        std::wstring PageText() const;
         bool CinematicActive() const;
         double CinematicDuration() const;
         double DialogueElapsed() const;

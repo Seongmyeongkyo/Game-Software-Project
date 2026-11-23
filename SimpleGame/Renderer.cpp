@@ -446,13 +446,13 @@ void Renderer::Circle(float x, float y, float radius, Color color)
     }
 }
 
-void Renderer::TexturedRect(float x, float y, float width, float height, Color color)
+void Renderer::TexturedRect(float x, float y, float width, float height, Color color, float uEnd)
 {
     const Vertex vertices[] = {{x, y, 0, 0, color.r, color.g, color.b, color.a},
-                               {x + width, y, 1, 0, color.r, color.g, color.b, color.a},
-                               {x + width, y + height, 1, 1, color.r, color.g, color.b, color.a},
+                               {x + width, y, uEnd, 0, color.r, color.g, color.b, color.a},
+                               {x + width, y + height, uEnd, 1, color.r, color.g, color.b, color.a},
                                {x, y, 0, 0, color.r, color.g, color.b, color.a},
-                               {x + width, y + height, 1, 1, color.r, color.g, color.b, color.a},
+                               {x + width, y + height, uEnd, 1, color.r, color.g, color.b, color.a},
                                {x, y + height, 0, 1, color.r, color.g, color.b, color.a}};
     m_Vertices.insert(m_Vertices.end(), vertices, vertices + 6);
 }
@@ -485,6 +485,27 @@ Renderer::TextTexture Renderer::CreateTextTexture(const std::wstring& text, int 
         return result;
     }
     HGDIOBJ previousFont = SelectObject(dc, font);
+    if (!previousFont || previousFont == HGDI_ERROR)
+    {
+        DeleteObject(font);
+        DeleteDC(dc);
+        return result;
+    }
+    result.advances.resize(text.size());
+    SIZE measured = {};
+    if (!GetTextExtentExPointW(dc,
+                               text.c_str(),
+                               static_cast<int>(text.size()),
+                               0,
+                               nullptr,
+                               result.advances.data(),
+                               &measured))
+    {
+        SelectObject(dc, previousFont);
+        DeleteObject(font);
+        DeleteDC(dc);
+        return result;
+    }
     RECT bounds = {0, 0, 0, 0};
     DrawTextW(dc,
               text.c_str(),
@@ -505,26 +526,48 @@ Renderer::TextTexture Renderer::CreateTextTexture(const std::wstring& text, int 
     if (bitmap && bitmapPixels)
     {
         HGDIOBJ previousBitmap = SelectObject(dc, bitmap);
+        if (!previousBitmap || previousBitmap == HGDI_ERROR)
+        {
+            DeleteObject(bitmap);
+            SelectObject(dc, previousFont);
+            DeleteObject(font);
+            DeleteDC(dc);
+            return result;
+        }
+        GdiFlush();
         std::memset(bitmapPixels, 0, result.width * result.height * 4);
         SetBkMode(dc, TRANSPARENT);
         SetTextColor(dc, RGB(255, 255, 255));
         RECT drawBounds = {0, 0, result.width, result.height};
-        DrawTextW(dc,
-                  text.c_str(),
-                  static_cast<int>(text.size()),
-                  &drawBounds,
-                  DT_LEFT | DT_TOP | DT_NOPREFIX);
-        GdiFlush();
-        unsigned char* data = static_cast<unsigned char*>(bitmapPixels);
+        const int drawnHeight = DrawTextW(dc,
+                                          text.c_str(),
+                                          static_cast<int>(text.size()),
+                                          &drawBounds,
+                                          DT_LEFT | DT_TOP | DT_NOPREFIX);
+        const bool flushed = GdiFlush() != FALSE;
+        const unsigned char* source = static_cast<const unsigned char*>(bitmapPixels);
+        std::vector<unsigned char> data(static_cast<size_t>(result.width) * result.height * 4);
         for (int i = 0; i < result.width * result.height; ++i)
         {
             const unsigned char alpha =
-                std::max(data[i * 4], std::max(data[i * 4 + 1], data[i * 4 + 2]));
+                std::max(source[i * 4], std::max(source[i * 4 + 1], source[i * 4 + 2]));
             data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = 255;
             data[i * 4 + 3] = alpha;
         }
+        SelectObject(dc, previousBitmap);
+        DeleteObject(bitmap);
+        bitmap = nullptr;
+        if (!flushed || drawnHeight <= 0)
+        {
+            SelectObject(dc, previousFont);
+            DeleteObject(font);
+            DeleteDC(dc);
+            return result;
+        }
         glGenTextures(1, &result.texture);
         glBindTexture(GL_TEXTURE_2D, result.texture);
+        GLint previousUnpackAlignment = 4;
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D,
                      0,
@@ -534,12 +577,22 @@ Renderer::TextTexture Renderer::CreateTextTexture(const std::wstring& text, int 
                      0,
                      GL_RGBA,
                      GL_UNSIGNED_BYTE,
-                     data);
+                     data.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        SelectObject(dc, previousBitmap);
+        GLint uploadedWidth = 0;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &uploadedWidth);
+        if (uploadedWidth != result.width)
+        {
+            glDeleteTextures(1, &result.texture);
+            result.texture = 0;
+        }
+    }
+    if (bitmap)
+    {
         DeleteObject(bitmap);
     }
     SelectObject(dc, previousFont);
@@ -565,9 +618,10 @@ void Renderer::Text(float x,
                     const std::wstring& text,
                     float pixels,
                     Color color,
-                    int weight)
+                    int weight,
+                    size_t visibleCharacters)
 {
-    if (!m_Initialized || text.empty() || pixels <= 0 || color.a <= 0)
+    if (!m_Initialized || text.empty() || pixels <= 0 || color.a <= 0 || visibleCharacters == 0)
     {
         return;
     }
@@ -579,8 +633,18 @@ void Renderer::Text(float x,
         Flush();
         if (m_TextCache.size() >= 1024)
         {
-            ClearTextCache();
-            m_BatchTexture = m_WhiteTexture;
+            auto oldest = std::min_element(m_TextCache.begin(),
+                                           m_TextCache.end(),
+                                           [](const auto& left, const auto& right)
+                                           {
+                                               return left.second.lastUsed < right.second.lastUsed;
+                                           });
+            if (m_BatchTexture == oldest->second.texture)
+            {
+                m_BatchTexture = m_WhiteTexture;
+            }
+            glDeleteTextures(1, &oldest->second.texture);
+            m_TextCache.erase(oldest);
         }
         TextTexture created = CreateTextTexture(text, pixelHeight, weight);
         if (!created.texture)
@@ -589,12 +653,20 @@ void Renderer::Text(float x,
         }
         found = m_TextCache.emplace(key, created).first;
     }
-    UseTexture(found->second.texture);
+    auto& texture = found->second;
+    texture.lastUsed = ++m_TextUseCounter;
+    int visibleWidth = texture.width;
+    if (visibleCharacters < text.size())
+    {
+        visibleWidth = std::clamp(texture.advances[visibleCharacters - 1], 0, texture.width);
+    }
+    UseTexture(texture.texture);
     TexturedRect(x,
                  y,
-                 static_cast<float>(found->second.width),
-                 static_cast<float>(found->second.height),
-                 color);
+                 static_cast<float>(visibleWidth),
+                 static_cast<float>(texture.height),
+                 color,
+                 static_cast<float>(visibleWidth) / texture.width);
 }
 
 Renderer::TextTexture Renderer::CreateImageTexture(const std::wstring& relativePath)

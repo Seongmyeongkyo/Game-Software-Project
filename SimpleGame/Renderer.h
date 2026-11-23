@@ -87,7 +87,8 @@ public:
               const std::wstring& text,
               float pixels,
               Color color,
-              int weight = 400);
+              int weight = 400,
+              size_t visibleCharacters = std::wstring::npos);
     bool Image(const std::wstring& relativePath,
                float x,
                float y,
@@ -117,13 +118,15 @@ private:
         GLuint texture;
         int width;
         int height;
+        std::vector<int> advances;
+        uint64_t lastUsed = 0;
     };
 
     GLuint CompileProgram();
     void Flush();
     void UseTexture(GLuint texture);
     void Triangle(Vec2 a, Vec2 b, Vec2 c, Color color);
-    void TexturedRect(float x, float y, float width, float height, Color color);
+    void TexturedRect(float x, float y, float width, float height, Color color, float uEnd = 1.0f);
     TextTexture CreateTextTexture(const std::wstring& text, int pixels, int weight);
     TextTexture CreateImageTexture(const std::wstring& relativePath);
     void ClearTextCache();
@@ -148,6 +151,7 @@ private:
     std::unique_ptr<PostProcess> m_PostProcess;
     std::vector<Vertex> m_Vertices;
     std::map<std::tuple<std::wstring, int, int>, TextTexture> m_TextCache;
+    uint64_t m_TextUseCounter = 0;
     std::map<std::wstring, TextTexture> m_ImageCache;
     uintptr_t m_ImageDecoderToken = 0;
 };
