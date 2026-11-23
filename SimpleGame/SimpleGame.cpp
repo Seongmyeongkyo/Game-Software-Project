@@ -223,9 +223,30 @@ namespace
         view.helpOpen = false;
     }
 
+    void OpenCinematic(narrative::StoryMoment moment)
+    {
+        if (moment == narrative::StoryMoment::FirstEcho)
+        {
+            firstEchoSceneShown = true;
+        }
+        view.dialogue.BeginCinematic(moment);
+        view.dialogueOpen = !view.dialogue.ShouldClose();
+        view.journalOpen = false;
+        view.helpOpen = false;
+    }
+
     void AdvanceDialogue()
     {
-        if (!view.dialogue.Complete() || view.dialogue.CinematicActive())
+        if (view.dialogue.CinematicActive())
+        {
+            view.dialogue.SkipCinematic();
+            if (view.dialogue.ShouldClose())
+            {
+                view.dialogueOpen = false;
+            }
+            return;
+        }
+        if (!view.dialogue.Complete())
         {
             view.dialogue.RevealAll();
         }
@@ -405,6 +426,15 @@ namespace
             return;
         }
         keys[key] = true;
+        if (view.dialogueOpen && view.dialogue.CinematicActive())
+        {
+            if (key == 'e' || key == ' ' || key == '\r' || key == 27)
+            {
+                AdvanceDialogue();
+            }
+            glutPostRedisplay();
+            return;
+        }
         switch (key)
         {
         case 27:
@@ -453,12 +483,9 @@ namespace
                 const int previousDeaths = state->deaths;
                 state->Die();
                 view.deathFlash = 1.0f;
-                if (state->deaths > previousDeaths && !firstEchoSceneShown)
+                if (state->deaths > previousDeaths)
                 {
-                    OpenDialogue(
-                        L"하나의 끝에서, 또 하나의 시작이 태어납니다.\n당신이 남긴 감정이 새로운 생명의 첫 표정이 됩니다.",
-                        narrative::Speaker::Narrator,
-                        narrative::StoryMoment::FirstEcho);
+                    OpenCinematic(narrative::StoryMoment::FirstEcho);
                 }
             }
             else if (state->realm == 0)
@@ -481,7 +508,7 @@ namespace
             view.dialogueOpen = view.helpOpen = false;
             break;
         case '1':
-            if (view.dialogueOpen && (!view.dialogue.Complete() || view.dialogue.CinematicActive()))
+            if (view.dialogueOpen && !view.dialogue.Complete())
             {
                 view.dialogue.RevealAll();
             }
@@ -495,7 +522,7 @@ namespace
             }
             break;
         case '2':
-            if (view.dialogueOpen && (!view.dialogue.Complete() || view.dialogue.CinematicActive()))
+            if (view.dialogueOpen && !view.dialogue.Complete())
             {
                 view.dialogue.RevealAll();
             }
@@ -532,6 +559,10 @@ namespace
     void SpecialDown(int key, int, int)
     {
         if (captureMode || shuttingDown)
+        {
+            return;
+        }
+        if (view.dialogueOpen && view.dialogue.CinematicActive())
         {
             return;
         }
@@ -634,6 +665,10 @@ namespace
             if (view.dialogueOpen)
             {
                 view.dialogue.Tick(dt);
+                if (view.dialogue.ShouldClose())
+                {
+                    view.dialogueOpen = false;
+                }
             }
             float moveX = 0.0f;
             float moveY = 0.0f;
@@ -683,20 +718,11 @@ namespace
                 if (state->deaths > previousDeaths)
                 {
                     view.deathFlash = 1.0f;
-                    if (!firstEchoSceneShown)
-                    {
-                        OpenDialogue(
-                            L"하나의 죽음은 하나의 생명을 만듭니다.\n끝난 줄 알았던 이야기가, 다른 목소리로 이어집니다.",
-                            narrative::Speaker::Narrator,
-                            narrative::StoryMoment::FirstEcho);
-                    }
+                    OpenCinematic(narrative::StoryMoment::FirstEcho);
                 }
                 else if (state->combat.growth.bosses > previousBosses)
                 {
-                    OpenDialogue(
-                        L"송신이 멈춘 자리에도, 누군가의 마지막 인사는 남아 있습니다.\n우리가 기억하는 동안, 그 목소리는 어디로 가는 걸까요?",
-                        narrative::Speaker::Narrator,
-                        narrative::StoryMoment::BossResolved);
+                    OpenCinematic(narrative::StoryMoment::BossResolved);
                 }
             }
             const double smoothing = 1.0 - std::exp(-7.0 * dt);

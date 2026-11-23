@@ -953,6 +953,11 @@ namespace prototype
 
         void Hud()
         {
+            if (view->dialogueOpen && view->dialogue.CinematicActive())
+            {
+                narrative::Draw(*draw, view->dialogue, view->time);
+                return;
+            }
             bool lumia = game->realm == 1;
             Color accent = lumia ? C(0x86E4CD) : C(0xD9BBA0);
             draw->Rect(0, 0, 1440, 5, accent);

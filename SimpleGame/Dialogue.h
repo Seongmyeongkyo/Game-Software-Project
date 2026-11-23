@@ -38,6 +38,7 @@ namespace narrative
         void Begin(const std::wstring& content,
                    Speaker currentSpeaker,
                    StoryMoment storyMoment = StoryMoment::None);
+        void BeginCinematic(StoryMoment storyMoment);
         void Tick(double dt);
         void RevealAll();
         bool Complete() const;
@@ -45,6 +46,10 @@ namespace narrative
         bool Advance();
         std::wstring VisibleText() const;
         bool CinematicActive() const;
+        double CinematicDuration() const;
+        double DialogueElapsed() const;
+        bool SkipCinematic();
+        bool ShouldClose() const;
         size_t PageIndex() const;
         size_t PageCount() const;
 
@@ -55,6 +60,8 @@ namespace narrative
         size_t m_Revealed = 0;
         double m_RevealBudget = 0.0;
         double m_NextDelay = 1.0 / 32.0;
+        double m_DialogueElapsed = 0.0;
+        bool m_CinematicOnly = false;
 
         void StartPage();
     };

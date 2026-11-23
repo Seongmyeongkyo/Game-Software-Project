@@ -8,7 +8,6 @@
 
 namespace
 {
-    constexpr double CinematicDuration = 5.0;
     constexpr double CharactersPerSecond = 32.0;
     constexpr double MaximumLineWidth = 36.5;
     constexpr size_t LinesPerPage = 4;
@@ -293,42 +292,157 @@ namespace
         renderer.Text(left + 24, 756, title, 14, Color(accent.r, accent.g, accent.b, arrival), 600);
     }
 
-    void Cinematic(Renderer& renderer, const narrative::DialogueState& state)
+    struct CinematicShot
     {
-        const float progress = static_cast<float>(state.cinematicElapsed / CinematicDuration);
-        const float opacity =
-            Ease(static_cast<float>(state.cinematicElapsed / .55))
-            * Ease(static_cast<float>((CinematicDuration - state.cinematicElapsed) / .8));
-        const float zoom = 1.03f + progress * .055f;
-        const float x = -(zoom - 1.0f) * 720.0f + std::sin(progress * 2.0f) * 7.0f;
-        const float y = -(zoom - 1.0f) * 450.0f - progress * 6.0f;
+        double begin;
+        double end;
+        float zoomFrom;
+        float zoomTo;
+        Vec2 focusFrom;
+        Vec2 focusTo;
+    };
+
+    float FadeWindow(double time, double begin, double end, double fade = .45)
+    {
+        return Ease(static_cast<float>((time - begin) / fade))
+               * Ease(static_cast<float>((end - time) / fade));
+    }
+
+    void CenteredText(Renderer& renderer,
+                      float y,
+                      const std::wstring& text,
+                      float size,
+                      Color color,
+                      int weight = 400)
+    {
+        double columns = 0.0;
+
+        for (size_t offset = 0; offset < text.size();)
+        {
+            size_t count = 0;
+            columns += CharacterWidth(CodePointAt(text, offset, count));
+            offset += count;
+        }
+
+        const float left = 720.0f - static_cast<float>(columns) * size * .5f;
+        renderer.Text(left + 1, y + 2, text, size, Color(0, 0, 0, color.a * .65f), weight);
+        renderer.Text(left, y, text, size, color, weight);
+    }
+
+    void CinematicFrame(Renderer& renderer, const CinematicShot& shot, double time, float opacity)
+    {
+        const float progress =
+            Ease(static_cast<float>((time - shot.begin) / (shot.end - shot.begin)));
+        const float zoom = shot.zoomFrom + (shot.zoomTo - shot.zoomFrom) * progress;
+        const float width = 1440.0f * zoom;
+        const float height = 900.0f * zoom;
+        const float focusX = shot.focusFrom.x + (shot.focusTo.x - shot.focusFrom.x) * progress;
+        const float focusY = shot.focusFrom.y + (shot.focusTo.y - shot.focusFrom.y) * progress;
+        const float driftX = static_cast<float>(std::sin(time * .42) * 3.0);
+        const float driftY = static_cast<float>(std::sin(time * .31) * 2.0);
+        const float x = std::clamp(720.0f - focusX * width + driftX, 1440.0f - width, 0.0f);
+        const float y = std::clamp(450.0f - focusY * height + driftY, 900.0f - height, 0.0f);
 
         renderer.Image(L"Assets/Dialogue/story-reunion.png",
                        x,
                        y,
-                       1440.0f * zoom,
-                       900.0f * zoom,
-                       Color(1, 1, 1, opacity * .92f),
+                       width,
+                       height,
+                       Color(1, 1, 1, opacity),
                        true);
-        renderer.Rect(0, 0, 1440, 900, C(0x051525, .18f * opacity));
-        renderer.Rect(0, 0, 1440, 112, C(0x071421, .86f * opacity));
-        renderer.Text(52, 25, L"잔향의 순간", 12, C(0x91BCBA, opacity), 600);
-        renderer.Text(50, 51, MomentName(state.moment), 28, C(0xE1F3EE, opacity), 600);
-        renderer.Rect(51, 97, 310 * std::min(1.0f, progress * 2.0f), 2, C(0x96E1D1, opacity * .7f));
+    }
 
-        for (int index = 0; index < 32; ++index)
+    void CinematicCaptions(Renderer& renderer, const narrative::DialogueState& state)
+    {
+        const wchar_t* first = L"하나의 죽음은 하나의 생명을 만듭니다.";
+        const wchar_t* second = L"끝난 줄 알았던 이야기가, 다른 목소리로 이어집니다.";
+
+        if (state.moment == narrative::StoryMoment::MemoryDiscovery)
+        {
+            first = L"처음 온 장소인데,";
+            second = L"누군가 나를 기다린 것 같습니다.";
+        }
+        else if (state.moment == narrative::StoryMoment::BossResolved)
+        {
+            first = L"송신이 멈춘 자리에도, 누군가의 마지막 인사는 남아 있습니다.";
+            second = L"우리가 기억하는 동안, 그 목소리는 어디로 가는 걸까요?";
+        }
+
+        const double time = state.cinematicElapsed;
+        const float titleAlpha = FadeWindow(time, .7, 3.1, .6);
+        const bool memoryScene = state.moment == narrative::StoryMoment::MemoryDiscovery;
+        const float firstAlpha =
+            FadeWindow(time, memoryScene ? 2.0 : 1.2, memoryScene ? 5.1 : 5.85);
+        const float secondAlpha = FadeWindow(time, 6.0, memoryScene ? 10.5 : 10.8);
+        CenteredText(renderer, 62, MomentName(state.moment), 22, C(0xDBE6E7, titleAlpha), 600);
+        CenteredText(renderer, 787, first, 22, C(0xF1ECE3, firstAlpha));
+        CenteredText(renderer, 787, second, 22, C(0xF1ECE3, secondAlpha));
+    }
+
+    void Cinematic(Renderer& renderer, const narrative::DialogueState& state)
+    {
+        const double time = state.cinematicElapsed;
+        const double duration = state.CinematicDuration();
+        const CinematicShot shots[] = {
+            {0.0, 3.5, 1.04f, 1.12f, Vec2(.50f, .50f), Vec2(.50f, .48f)},
+            {3.1, 6.0, 1.88f, 2.03f, Vec2(.22f, .38f), Vec2(.23f, .36f)},
+            {5.6, 8.6, 1.87f, 2.02f, Vec2(.79f, .38f), Vec2(.78f, .36f)},
+            {8.1, 11.5, 1.18f, 1.07f, Vec2(.50f, .46f), Vec2(.50f, .49f)}};
+        size_t current = 0;
+
+        for (size_t index = 1; index < sizeof(shots) / sizeof(shots[0]); ++index)
+        {
+            if (time >= shots[index].begin)
+            {
+                current = index;
+            }
+        }
+
+        renderer.Rect(0, 0, 1440, 900, C(0x000000));
+        const float dissolve =
+            current == 0 ? 1.0f : Ease(static_cast<float>((time - shots[current].begin) / .5));
+
+        if (current > 0 && dissolve < 1.0f)
+        {
+            CinematicFrame(renderer, shots[current - 1], time, 1.0f);
+        }
+
+        CinematicFrame(renderer, shots[current], time, dissolve);
+        renderer.Rect(0, 0, 1440, 900, C(0x102039, .08f));
+
+        for (int index = 0; index < 20; ++index)
+        {
+            const float edge = 1.0f - index / 20.0f;
+            const Color shade(0, 0, 0, edge * edge * .28f);
+            renderer.Rect(index * 8.0f, 0, 8, 900, shade);
+            renderer.Rect(1432.0f - index * 8.0f, 0, 8, 900, shade);
+        }
+
+        for (int index = 0; index < 22; ++index)
         {
             const double seed = index * 2.399963;
-            const float px =
-                static_cast<float>(std::fmod(index * 113.17 + state.cinematicElapsed * 11, 1440.0));
-            const float py = static_cast<float>(
-                120 + std::fmod(index * 71.31 + state.cinematicElapsed * 23, 480.0));
-            const float radius = index % 4 == 0 ? 2.5f : 1.2f;
-            const float alpha =
-                opacity
-                * static_cast<float>(.13 + .12 * (std::sin(seed + state.cinematicElapsed) + 1));
-            renderer.Circle(px, py, radius, C(index % 3 == 0 ? 0xD8B6F2 : 0xA2F0D9, alpha));
+            const float px = static_cast<float>(std::fmod(index * 137.17 + time * 5.0, 1440.0));
+            const float py = static_cast<float>(140 + std::fmod(index * 71.31 + time * 8.0, 610.0));
+            const float radius = index % 5 == 0 ? 2.1f : 1.0f;
+            const float alpha = static_cast<float>(.08 + .06 * (std::sin(seed + time * .6) + 1));
+            const unsigned color = index % 3 == 0 ? 0xF3C28E : 0xA2DDCF;
+            renderer.Circle(px, py, radius * 3.0f, C(color, alpha * .12f));
+            renderer.Circle(px, py, radius, C(color, alpha));
         }
+
+        const float barHeight = 132.0f + 17.0f * Ease(static_cast<float>(time / .8));
+        renderer.Rect(0, 0, 1440, barHeight, C(0x000000));
+        renderer.Rect(0, 900 - barHeight, 1440, barHeight, C(0x000000));
+        CinematicCaptions(renderer, state);
+        renderer.Text(1110,
+                      866,
+                      L"[E / SPACE / ENTER / ESC] 건너뛰기",
+                      11,
+                      C(0x839397, Ease(static_cast<float>((time - 1.0) / .8)) * .65f));
+
+        const float opening = Ease(static_cast<float>(time / .8));
+        const float closing = Ease(static_cast<float>((duration - time) / .95));
+        renderer.Rect(0, 0, 1440, 900, Color(0, 0, 0, 1.0f - opening * closing));
     }
 } // namespace
 
@@ -347,10 +461,19 @@ namespace narrative
         moment = storyMoment;
         elapsed = 0.0;
         cinematicElapsed = 0.0;
+        m_DialogueElapsed = 0.0;
+        m_CinematicOnly = false;
         choicesAvailable = true;
         m_Page = 0;
         m_Pages = MakePages(text);
         StartPage();
+    }
+
+    void DialogueState::BeginCinematic(StoryMoment storyMoment)
+    {
+        Begin(std::wstring(), Speaker::Narrator, storyMoment);
+        m_CinematicOnly = true;
+        choicesAvailable = false;
     }
 
     void DialogueState::StartPage()
@@ -383,7 +506,25 @@ namespace narrative
 
         dt = std::min(.25, dt);
         elapsed += dt;
-        cinematicElapsed += dt;
+
+        if (CinematicActive())
+        {
+            const double cinematicStep = std::min(dt, CinematicDuration() - cinematicElapsed);
+            cinematicElapsed = std::min(CinematicDuration(), cinematicElapsed + cinematicStep);
+            dt -= cinematicStep;
+
+            if (dt <= 0.0)
+            {
+                return;
+            }
+        }
+
+        if (m_CinematicOnly)
+        {
+            return;
+        }
+
+        m_DialogueElapsed += dt;
         m_RevealBudget += dt;
 
         while (!Complete() && m_RevealBudget >= m_NextDelay)
@@ -401,7 +542,6 @@ namespace narrative
     {
         m_Revealed = m_ClusterEnds.size();
         m_RevealBudget = 0.0;
-        cinematicElapsed = CinematicDuration;
     }
 
     bool DialogueState::Complete() const
@@ -416,7 +556,7 @@ namespace narrative
 
     bool DialogueState::Advance()
     {
-        if (!Complete() || !HasNextPage())
+        if (m_CinematicOnly || CinematicActive() || !Complete() || !HasNextPage())
         {
             return false;
         }
@@ -438,7 +578,36 @@ namespace narrative
 
     bool DialogueState::CinematicActive() const
     {
-        return moment != StoryMoment::None && cinematicElapsed < CinematicDuration;
+        return moment != StoryMoment::None && cinematicElapsed < CinematicDuration();
+    }
+
+    double DialogueState::CinematicDuration() const
+    {
+        return moment == StoryMoment::None ? 0.0 : 11.5;
+    }
+
+    double DialogueState::DialogueElapsed() const
+    {
+        return m_DialogueElapsed;
+    }
+
+    bool DialogueState::SkipCinematic()
+    {
+        if (!CinematicActive())
+        {
+            return false;
+        }
+
+        cinematicElapsed = CinematicDuration();
+        m_DialogueElapsed = 0.0;
+        m_Page = 0;
+        StartPage();
+        return true;
+    }
+
+    bool DialogueState::ShouldClose() const
+    {
+        return m_CinematicOnly && !CinematicActive();
     }
 
     size_t DialogueState::PageIndex() const
@@ -453,14 +622,19 @@ namespace narrative
 
     void Draw(Renderer& renderer, const DialogueState& state, double time)
     {
-        renderer.Rect(0, 0, 1440, 900, C(0x020A15, .64f));
+        if (state.ShouldClose())
+        {
+            return;
+        }
 
         if (state.CinematicActive())
         {
             Cinematic(renderer, state);
+            return;
         }
 
-        const float arrival = Ease(static_cast<float>(state.elapsed / .28));
+        renderer.Rect(0, 0, 1440, 900, C(0x020A15, .64f));
+        const float arrival = Ease(static_cast<float>(state.DialogueElapsed() / .28));
         const bool playerSpeaking = state.speaker == Speaker::Player;
         const bool seaCounterpart = state.counterpart == Speaker::Sea;
         const Color accent =
@@ -529,6 +703,16 @@ namespace narrative
                               + std::to_wstring(state.PageCount()),
                           11,
                           C(0x7C9AA9));
+        }
+
+        if (state.moment != StoryMoment::None && state.DialogueElapsed() < .45)
+        {
+            renderer.Rect(
+                0,
+                0,
+                1440,
+                900,
+                Color(0, 0, 0, 1.0f - Ease(static_cast<float>(state.DialogueElapsed() / .45))));
         }
     }
 } // namespace narrative
