@@ -16,6 +16,8 @@ namespace prototype
         bool dialogueOpen = false;
         bool journalOpen = false;
         bool helpOpen = false;
+        bool questsOpen = false;
+        int questTab = 0;
         bool guarding = false;
         narrative::DialogueState dialogue;
     };

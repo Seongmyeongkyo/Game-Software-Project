@@ -151,6 +151,25 @@ namespace
         return true;
     }
 
+    bool ValidQuests(const echo::QuestState& quests)
+    {
+        std::ostringstream output;
+        output.imbue(std::locale::classic());
+        output << std::setprecision(17);
+        quests.Write(output);
+        std::istringstream input(output.str());
+        input.imbue(std::locale::classic());
+        echo::QuestState checked;
+
+        if (!checked.Read(input))
+        {
+            return false;
+        }
+
+        input >> std::ws;
+        return input.eof();
+    }
+
     void WriteCombat(std::ostream& output, const echo::CombatWorld& combat)
     {
         const auto& growth = combat.growth;
@@ -261,6 +280,9 @@ namespace echo
         {
             Load();
         }
+        const std::wstring startupMessage = message;
+        UpdateQuests(0.0);
+        message = startupMessage;
     }
 
     void GameState::NormalizeProfile()
@@ -307,8 +329,9 @@ namespace echo
                 NormalizeProfile();
             }
         }
+        const bool questsChanged = UpdateQuests(dt);
         saveTimer += dt;
-        if (saveTimer >= 10.0)
+        if (questsChanged || saveTimer >= 10.0)
         {
             saveTimer = 0.0;
             Save();
@@ -339,9 +362,14 @@ namespace echo
         {
             Die();
         }
-        else if (outcome.changed)
+        else
         {
-            Save();
+            const bool questsChanged = UpdateQuests(0.0);
+
+            if (outcome.changed || questsChanged)
+            {
+                Save();
+            }
         }
     }
 
@@ -370,6 +398,7 @@ namespace echo
         combat.OnRealmChanged();
         message = realm == 1 ? L"루미아 접속 완료 · 현실에서 이어진 선택이 이곳에도 남습니다."
                              : L"현실 도시로 돌아왔습니다 · 루미아의 존재와 발견은 보존됩니다.";
+        UpdateQuests(0.0);
         Save();
     }
 
@@ -402,6 +431,7 @@ namespace echo
         combat.ResetAfterDeath();
         message = L"하나의 죽음, 하나의 생명 · 유실체 #" + std::to_wstring(life.id)
                   + L"가 당신의 성향을 이어받아 루미아에 태어났습니다.";
+        UpdateQuests(0.0);
         Save();
     }
 
@@ -458,8 +488,103 @@ namespace echo
         message = worldRealm == 0
                       ? L"현실의 숨겨진 흔적을 발견했습니다 · 이 발견은 세계에 남습니다."
                       : L"루미아의 잔향을 발견했습니다 · 이 장소와 발견 기록이 보존됩니다.";
+        UpdateQuests(0.0);
         Save();
         return true;
+    }
+
+    void GameState::ApplyQuestReward(const QuestReward& reward)
+    {
+        constexpr int maximumCurrency = 1000000000;
+        const int experience = std::clamp(reward.xp, 0, maximumCurrency);
+        const int fragments = std::clamp(reward.fragments, 0, maximumCurrency);
+        const int cores = std::clamp(reward.cores, 0, maximumCurrency);
+        combat.AddExperience(experience);
+        combat.growth.fragments += std::min(fragments, maximumCurrency - combat.growth.fragments);
+        combat.growth.cores += std::min(cores, maximumCurrency - combat.growth.cores);
+
+        if (experience > 0 || fragments > 0 || cores > 0)
+        {
+            combat.dirty = true;
+        }
+    }
+
+    bool GameState::UpdateQuests(double dt)
+    {
+        QuestMetrics metrics;
+        metrics.realm = realm;
+        metrics.kills = combat.growth.kills;
+        metrics.bosses = combat.growth.bosses;
+        metrics.discoveries = static_cast<int>(discoveries.size());
+        metrics.deaths = deaths;
+        metrics.today = QuestState::CurrentDay();
+        metrics.broadcasting = broadcasting;
+        metrics.dt = dt;
+        QuestReward reward;
+        quests.notification.clear();
+        const bool changed = quests.Update(metrics, reward);
+
+        if (changed)
+        {
+            ApplyQuestReward(reward);
+
+            if (!quests.notification.empty())
+            {
+                message = quests.notification;
+            }
+        }
+
+        return changed;
+    }
+
+    bool GameState::CompleteQuest(QuestTarget target, int choice)
+    {
+        const bool refreshed = UpdateQuests(0.0);
+        QuestReward reward;
+        quests.notification.clear();
+        const bool completed = quests.Complete(target, choice, reward);
+
+        if (completed)
+        {
+            ApplyQuestReward(reward);
+
+            if (!quests.notification.empty())
+            {
+                message = quests.notification;
+            }
+        }
+
+        if (completed || refreshed)
+        {
+            Save();
+        }
+
+        return completed;
+    }
+
+    bool GameState::ClaimDailyQuest(size_t index)
+    {
+        const bool refreshed = UpdateQuests(0.0);
+        QuestReward reward;
+        quests.notification.clear();
+        const bool claimed = quests.ClaimDaily(index, reward);
+
+        if (claimed)
+        {
+            ApplyQuestReward(reward);
+
+            if (!quests.notification.empty())
+            {
+                message = quests.notification;
+            }
+        }
+
+        if (claimed || refreshed)
+        {
+            Save();
+        }
+
+        return claimed;
     }
 
     std::wstring GameState::ProfileName() const
@@ -494,7 +619,8 @@ namespace echo
             || travelled < 0.0 || (realm != 0 && realm != 1) || deaths < 0
             || static_cast<size_t>(deaths) != echoes.size() || echoes.size() > MaxEchoes
             || discoveries.size() > MaxDiscoveries
-            || !ValidProfile(protection, aggression, curiosity) || !ValidCombat(combat))
+            || !ValidProfile(protection, aggression, curiosity) || !ValidCombat(combat)
+            || !ValidQuests(quests))
         {
             message = L"현재 상태 검증에 실패해 이전 저장 파일을 유지했습니다.";
             return false;
@@ -502,7 +628,7 @@ namespace echo
 
         std::ostringstream output;
         output.imbue(std::locale::classic());
-        output << std::setprecision(17) << "ECHO_PROTO_SAVE 2\n"
+        output << std::setprecision(17) << "ECHO_PROTO_SAVE 3\n"
                << "STATE " << realm << ' ' << x << ' ' << y << ' ' << travelled << ' ' << deaths
                << ' ' << protection << ' ' << aggression << ' ' << curiosity << ' '
                << (broadcasting ? 1 : 0) << ' ' << nextEchoId << '\n'
@@ -535,6 +661,7 @@ namespace echo
             output << discovery.realm << ' ' << discovery.cellX << ' ' << discovery.cellY << '\n';
         }
         WriteCombat(output, combat);
+        quests.Write(output);
         output << "END\n";
         const std::string data = output.str();
         if (data.size() > static_cast<size_t>(MaxSaveBytes))
@@ -657,8 +784,9 @@ namespace echo
         std::vector<EchoLife> savedEchoes;
         std::vector<Discovery> savedDiscoveries;
         CombatWorld savedCombat;
+        QuestState savedQuests;
         bool valid = static_cast<bool>(input >> token >> version) && token == "ECHO_PROTO_SAVE"
-                     && (version == 1 || version == 2);
+                     && (version == 1 || version == 2 || version == 3);
         valid = valid && static_cast<bool>(input >> token) && token == "STATE"
                 && static_cast<bool>(input >> savedRealm >> savedX >> savedY >> savedTravelled
                                      >> savedDeaths >> savedProtection >> savedAggression
@@ -709,9 +837,14 @@ namespace echo
                 savedDiscoveries.push_back(discovery);
             }
         }
-        if (valid && version == 2)
+        if (valid && version >= 2)
         {
             valid = ReadCombat(input, savedCombat);
+        }
+
+        if (valid && version == 3)
+        {
+            valid = savedQuests.Read(input);
         }
 
         valid = valid && static_cast<bool>(input >> token) && token == "END";
@@ -739,11 +872,13 @@ namespace echo
         echoes.swap(savedEchoes);
         discoveries.swap(savedDiscoveries);
         combat = std::move(savedCombat);
+        quests = std::move(savedQuests);
         combat.OnRealmChanged();
         combat.dirty = false;
         saveTimer = 0.0;
         saveBlocked = false;
-        message = L"이전 세계 기록을 이어갑니다 · 발견과 유실체가 보존되어 있습니다.";
+        UpdateQuests(0.0);
+        message = L"이전 여정을 이어갑니다 · 세계 기록과 퀘스트 진행이 보존되어 있습니다.";
         return true;
     }
 } // namespace echo

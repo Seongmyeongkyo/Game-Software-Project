@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "Combat.h"
+#include "Quests.h"
 
 namespace echo
 {
@@ -41,6 +42,7 @@ namespace echo
         std::vector<Discovery> discoveries;
         std::wstring message;
         CombatWorld combat;
+        QuestState quests;
 
         void Update(double dt, float moveX, float moveY, bool sprint);
         void UpdateCombat(double dt, bool guarding);
@@ -50,6 +52,8 @@ namespace echo
         void Act(bool protect);
         bool Discover(int realm, int cx, int cy);
         bool HasDiscovery(int realm, int cx, int cy) const;
+        bool CompleteQuest(QuestTarget target, int choice = -1);
+        bool ClaimDailyQuest(size_t index);
         bool Save();
         bool Load();
         std::wstring ProfileName() const;
@@ -59,6 +63,8 @@ namespace echo
         double saveTimer = 0.0;
         bool saveBlocked = false;
         void NormalizeProfile();
+        bool UpdateQuests(double dt);
+        void ApplyQuestReward(const QuestReward& reward);
         void PreserveUnreadableSave(const std::wstring& path);
     };
 } // namespace echo

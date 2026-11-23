@@ -34,6 +34,11 @@ namespace narrative
         double elapsed = 0.0;
         double cinematicElapsed = 0.0;
         bool choicesAvailable = true;
+        std::wstring speakerLabel;
+        std::wstring counterpartLabel;
+        std::wstring counterpartImage;
+        std::wstring choiceLabels[2];
+        bool customCounterpart = false;
 
         void Begin(const std::wstring& content,
                    Speaker currentSpeaker,

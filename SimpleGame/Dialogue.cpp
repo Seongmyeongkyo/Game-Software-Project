@@ -464,6 +464,12 @@ namespace narrative
         m_DialogueElapsed = 0.0;
         m_CinematicOnly = false;
         choicesAvailable = true;
+        speakerLabel.clear();
+        counterpartLabel.clear();
+        counterpartImage.clear();
+        choiceLabels[0].clear();
+        choiceLabels[1].clear();
+        customCounterpart = false;
         m_Page = 0;
         m_Pages = MakePages(text);
         StartPage();
@@ -648,21 +654,31 @@ namespace narrative
                  arrival,
                  C(0xA9D9E3));
         Portrait(renderer,
-                 seaCounterpart ? L"Assets/Dialogue/sea.png" : L"Assets/Dialogue/echo.png",
-                 seaCounterpart ? L"세아"
-                                : (state.speaker == Speaker::Narrator ? L"잔향의 기록" : L"유실체"),
+                 state.customCounterpart
+                     ? state.counterpartImage
+                     : (seaCounterpart ? L"Assets/Dialogue/sea.png" : L"Assets/Dialogue/echo.png"),
+                 !state.counterpartLabel.empty()
+                     ? state.counterpartLabel
+                     : (seaCounterpart
+                            ? L"세아"
+                            : (state.speaker == Speaker::Narrator ? L"잔향의 기록" : L"유실체")),
                  1170,
                  !playerSpeaking,
                  time + .6,
                  arrival,
                  accent,
-                 !seaCounterpart);
+                 !state.customCounterpart && !seaCounterpart);
 
         const float panelY = 610 + (1.0f - arrival) * 14.0f;
         renderer.RoundedRect(300, panelY + 5, 840, 250, 14, C(0x000711, .35f * arrival));
         renderer.RoundedRect(300, panelY, 840, 250, 14, C(0x0B1B2B, .98f * arrival));
         renderer.Rect(321, panelY, 798, 2, Color(accent.r, accent.g, accent.b, .55f * arrival));
-        renderer.Text(328, panelY + 18, SpeakerName(state.speaker), 16, accent, 600);
+        renderer.Text(328,
+                      panelY + 18,
+                      state.speakerLabel.empty() ? SpeakerName(state.speaker) : state.speakerLabel,
+                      16,
+                      accent,
+                      600);
         renderer.Rect(329, panelY + 48, 780, 1, C(0x7091A2, .2f * arrival));
         std::wistringstream lines(state.VisibleText());
         std::wstring line;
@@ -684,11 +700,21 @@ namespace narrative
 
         if (choicesReady)
         {
-            renderer.RoundedRect(327, panelY + 199, 217, 32, 6, C(0x203C47));
-            renderer.RoundedRect(556, panelY + 199, 247, 32, 6, C(0x263345));
-            renderer.Text(341, panelY + 206, L"[1] 함께할게", 13, C(0xB7E4D8));
-            renderer.Text(570, panelY + 206, L"[2] 이야기를 듣는다", 13, C(0xB8C9D6));
-            renderer.Text(825, panelY + 207, L"[E / SPACE] 마치기", 11, C(0x8FA9B8));
+            renderer.RoundedRect(327, panelY + 199, 380, 32, 6, C(0x203C47));
+            renderer.RoundedRect(719, panelY + 199, 394, 32, 6, C(0x263345));
+            renderer.Text(
+                341,
+                panelY + 207,
+                L"[1] " + (state.choiceLabels[0].empty() ? L"함께할게" : state.choiceLabels[0]),
+                12,
+                C(0xB7E4D8));
+            renderer.Text(
+                733,
+                panelY + 207,
+                L"[2] "
+                    + (state.choiceLabels[1].empty() ? L"이야기를 듣는다" : state.choiceLabels[1]),
+                12,
+                C(0xB8C9D6));
         }
         else
         {

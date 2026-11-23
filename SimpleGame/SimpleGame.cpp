@@ -30,6 +30,7 @@ but WITHOUT ANY WARRANTY.
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #pragma comment(lib, "gdiplus.lib")
@@ -53,6 +54,12 @@ namespace
     int resultCode = 0;
     int previousTime = 0;
     std::wstring capturePath;
+    echo::QuestScene questScene;
+    echo::QuestTarget questSceneTarget = echo::QuestTarget::None;
+    size_t questLineIndex = 0;
+    int questChoice = -1;
+    bool questSceneActive = false;
+    std::wstring questCounterpart;
 
     double Distance(double ax, double ay, double bx, double by)
     {
@@ -193,13 +200,24 @@ namespace
 
     bool PanelOpen()
     {
-        return view.dialogueOpen || view.journalOpen || view.helpOpen;
+        return view.dialogueOpen || view.journalOpen || view.helpOpen || view.questsOpen;
+    }
+
+    void CancelQuestScene()
+    {
+        questSceneActive = false;
+        questScene = echo::QuestScene();
+        questSceneTarget = echo::QuestTarget::None;
+        questLineIndex = 0;
+        questChoice = -1;
+        questCounterpart.clear();
     }
 
     void OpenDialogue(const std::wstring& text,
                       narrative::Speaker speaker = narrative::Speaker::Narrator,
                       narrative::StoryMoment moment = narrative::StoryMoment::None)
     {
+        CancelQuestScene();
         if (moment == narrative::StoryMoment::FirstEcho)
         {
             if (firstEchoSceneShown)
@@ -221,10 +239,12 @@ namespace
         view.dialogueOpen = true;
         view.journalOpen = false;
         view.helpOpen = false;
+        view.questsOpen = false;
     }
 
     void OpenCinematic(narrative::StoryMoment moment)
     {
+        CancelQuestScene();
         if (moment == narrative::StoryMoment::FirstEcho)
         {
             firstEchoSceneShown = true;
@@ -233,6 +253,109 @@ namespace
         view.dialogueOpen = !view.dialogue.ShouldClose();
         view.journalOpen = false;
         view.helpOpen = false;
+        view.questsOpen = false;
+    }
+
+    void ShowQuestLine()
+    {
+        const auto& line = questScene.lines[questLineIndex];
+        narrative::Speaker speaker = narrative::Speaker::Narrator;
+        if (line.speaker == L"주인공" || line.speaker == L"플레이어" || line.speaker == L"당신")
+        {
+            speaker = narrative::Speaker::Player;
+        }
+        else if (line.speaker.find(L"세아") != std::wstring::npos)
+        {
+            speaker = narrative::Speaker::Sea;
+        }
+        else if (line.speaker.find(L"유실체") != std::wstring::npos)
+        {
+            speaker = narrative::Speaker::Echo;
+        }
+        if (speaker != narrative::Speaker::Player)
+        {
+            questCounterpart = line.speaker;
+        }
+        view.dialogue.Begin(line.text, speaker);
+        view.dialogue.speakerLabel = line.speaker;
+        view.dialogue.counterpartLabel = questCounterpart;
+        if (questCounterpart.find(L"세아") != std::wstring::npos)
+        {
+            view.dialogue.counterpart = narrative::Speaker::Sea;
+        }
+        else if (questCounterpart.find(L"유실체") != std::wstring::npos)
+        {
+            view.dialogue.counterpart = narrative::Speaker::Echo;
+        }
+        else
+        {
+            view.dialogue.customCounterpart = true;
+        }
+        view.dialogue.choicesAvailable =
+            questScene.hasChoice && questLineIndex + 1 == questScene.lines.size();
+        view.dialogue.choiceLabels[0] = questScene.choices[0];
+        view.dialogue.choiceLabels[1] = questScene.choices[1];
+        view.dialogueOpen = true;
+        view.journalOpen = false;
+        view.helpOpen = false;
+        view.questsOpen = false;
+    }
+
+    bool OpenQuestScene(echo::QuestTarget target, const std::wstring& introduction = std::wstring())
+    {
+        echo::QuestScene scene = state->quests.Scene(target);
+        if (scene.lines.empty())
+        {
+            return false;
+        }
+        if (!introduction.empty())
+        {
+            scene.lines.insert(scene.lines.begin(), {L"유실체", introduction});
+        }
+        CancelQuestScene();
+        questScene = std::move(scene);
+        questSceneTarget = target;
+        questSceneActive = true;
+        ShowQuestLine();
+        return true;
+    }
+
+    void FinishQuestScene()
+    {
+        const echo::QuestTarget target = questSceneTarget;
+        const int choice = questChoice;
+        CancelQuestScene();
+        view.dialogueOpen = false;
+        state->CompleteQuest(target, choice);
+    }
+
+    void ChooseQuestOption(int choice)
+    {
+        if (!view.dialogue.Complete())
+        {
+            view.dialogue.RevealAll();
+            return;
+        }
+        if (!questScene.hasChoice || view.dialogue.HasNextPage()
+            || questLineIndex + 1 != questScene.lines.size())
+        {
+            return;
+        }
+        questChoice = choice;
+        questScene.hasChoice = false;
+        if (questScene.responses[choice].empty())
+        {
+            questScene.lines.push_back({L"주인공", questScene.choices[choice]});
+        }
+        else
+        {
+            for (const auto& response : questScene.responses[choice])
+            {
+                questScene.lines.push_back(response);
+            }
+        }
+        ++questLineIndex;
+        ShowQuestLine();
     }
 
     void AdvanceDialogue()
@@ -243,6 +366,27 @@ namespace
             if (view.dialogue.ShouldClose())
             {
                 view.dialogueOpen = false;
+            }
+            return;
+        }
+        if (questSceneActive)
+        {
+            if (!view.dialogue.Complete())
+            {
+                view.dialogue.RevealAll();
+            }
+            else if (view.dialogue.HasNextPage())
+            {
+                view.dialogue.Advance();
+            }
+            else if (questLineIndex + 1 < questScene.lines.size())
+            {
+                ++questLineIndex;
+                ShowQuestLine();
+            }
+            else if (!questScene.hasChoice)
+            {
+                FinishQuestScene();
             }
             return;
         }
@@ -291,11 +435,77 @@ namespace
         EnsureWalkablePosition();
     }
 
+    void InteractWithEcho(const echo::EchoLife& life)
+    {
+        std::wstring introduction;
+        if (life.protection >= life.aggression && life.protection >= life.curiosity)
+        {
+            introduction =
+                L"위험한 길이면 내가 먼저 가볼게. 그래도 오늘은 내가 가고 싶은 곳도 있어.";
+        }
+        else if (life.aggression >= life.curiosity)
+        {
+            introduction =
+                L"앞을 막으면 뚫으면 되는 줄 알았어. 잠깐 멈춰도 괜찮다는 건, 배우는 중이야.";
+        }
+        else
+        {
+            introduction =
+                L"저 길 끝에는 뭐가 있을까? 네게서 시작했지만, 내가 고른 길도 걷고 싶어.";
+        }
+        if (!OpenQuestScene(echo::QuestTarget::Echo, introduction))
+        {
+            OpenDialogue(introduction, narrative::Speaker::Echo);
+        }
+    }
+
     void Interact()
     {
         if (view.dialogueOpen)
         {
             AdvanceDialogue();
+            return;
+        }
+        const echo::QuestAnchor* questAnchor = nullptr;
+        double questDistance = 2.2;
+        for (const auto& anchor : echo::QuestAnchors())
+        {
+            if (anchor.realm != state->realm)
+            {
+                continue;
+            }
+            const double candidate = Distance(state->x, state->y, anchor.x, anchor.y);
+            if (candidate < questDistance)
+            {
+                questAnchor = &anchor;
+                questDistance = candidate;
+            }
+        }
+        const echo::EchoLife* nearestEcho = nullptr;
+        double echoDistance = 2.2;
+        if (state->realm == 1)
+        {
+            for (const auto& life : state->echoes)
+            {
+                const double candidate = Distance(state->x, state->y, life.x, life.y);
+                if (candidate < echoDistance)
+                {
+                    nearestEcho = &life;
+                    echoDistance = candidate;
+                }
+            }
+        }
+        const auto trackedTarget = state->quests.Tracked().target;
+        const bool trackedAnchor = questAnchor && questAnchor->target == trackedTarget;
+        if (nearestEcho
+            && (!questAnchor || trackedTarget == echo::QuestTarget::Echo
+                || (!trackedAnchor && echoDistance <= questDistance)))
+        {
+            InteractWithEcho(*nearestEcho);
+            return;
+        }
+        if (questAnchor && OpenQuestScene(questAnchor->target))
+        {
             return;
         }
         if (state->realm == 0 && Distance(state->x, state->y, 1.0, -1.3) < 2.2)
@@ -320,45 +530,10 @@ namespace
             }
             return;
         }
-        if (state->realm == 1)
+        if (nearestEcho)
         {
-            const echo::EchoLife* nearest = nullptr;
-            double distance = 2.2;
-            for (const echo::EchoLife& life : state->echoes)
-            {
-                const double candidate = Distance(state->x, state->y, life.x, life.y);
-                if (candidate < distance)
-                {
-                    nearest = &life;
-                    distance = candidate;
-                }
-            }
-            if (nearest)
-            {
-                if (nearest->protection >= nearest->aggression
-                    && nearest->protection >= nearest->curiosity)
-                {
-                    OpenDialogue(
-                        L"유실체: 위험한 길이면 내가 먼저 가볼게.\n그런데... 오늘은 저 빛나는 숲에 가보고 싶어.",
-                        narrative::Speaker::Echo,
-                        narrative::StoryMoment::FirstEcho);
-                }
-                else if (nearest->aggression >= nearest->curiosity)
-                {
-                    OpenDialogue(
-                        L"유실체: 앞을 막으면 뚫으면 되는 줄 알았어.\n잠깐 멈춰도 괜찮다는 건, 이제 배우는 중이야.",
-                        narrative::Speaker::Echo,
-                        narrative::StoryMoment::FirstEcho);
-                }
-                else
-                {
-                    OpenDialogue(
-                        L"유실체: 저 길 끝에는 뭐가 있을까?\n네게서 시작했지만, 내가 고른 길도 걷고 싶어.",
-                        narrative::Speaker::Echo,
-                        narrative::StoryMoment::FirstEcho);
-                }
-                return;
-            }
+            InteractWithEcho(*nearestEcho);
+            return;
         }
         const int centerX = static_cast<int>(std::floor(state->x / 8.0));
         const int centerY = static_cast<int>(std::floor(state->y / 8.0));
@@ -435,12 +610,36 @@ namespace
             glutPostRedisplay();
             return;
         }
+        if (view.questsOpen)
+        {
+            if (key >= '1' && key <= '3')
+            {
+                view.questTab = key - '1';
+            }
+            else if (key == 'f' && view.questTab == 2)
+            {
+                for (size_t index = 0; index < 3; ++index)
+                {
+                    state->ClaimDailyQuest(index);
+                }
+            }
+            else if (key == 'k' || key == 27)
+            {
+                view.questsOpen = false;
+            }
+            glutPostRedisplay();
+            return;
+        }
         switch (key)
         {
         case 27:
             if (PanelOpen())
             {
-                view.dialogueOpen = view.journalOpen = view.helpOpen = false;
+                CancelQuestScene();
+                view.dialogueOpen = false;
+                view.journalOpen = false;
+                view.helpOpen = false;
+                view.questsOpen = false;
             }
             else
             {
@@ -504,10 +703,25 @@ namespace
             }
             break;
         case 'j':
+            CancelQuestScene();
             view.journalOpen = !view.journalOpen;
             view.dialogueOpen = view.helpOpen = false;
+            view.questsOpen = false;
+            break;
+        case 'k':
+            CancelQuestScene();
+            view.questsOpen = true;
+            view.questTab = 0;
+            view.dialogueOpen = false;
+            view.journalOpen = false;
+            view.helpOpen = false;
             break;
         case '1':
+            if (questSceneActive)
+            {
+                ChooseQuestOption(0);
+                break;
+            }
             if (view.dialogueOpen && !view.dialogue.Complete())
             {
                 view.dialogue.RevealAll();
@@ -522,6 +736,11 @@ namespace
             }
             break;
         case '2':
+            if (questSceneActive)
+            {
+                ChooseQuestOption(1);
+                break;
+            }
             if (view.dialogueOpen && !view.dialogue.Complete())
             {
                 view.dialogue.RevealAll();
@@ -585,8 +804,10 @@ namespace
         }
         if (key == GLUT_KEY_F1)
         {
+            CancelQuestScene();
             view.helpOpen = !view.helpOpen;
             view.dialogueOpen = view.journalOpen = false;
+            view.questsOpen = false;
         }
         if (key == GLUT_KEY_F5)
         {

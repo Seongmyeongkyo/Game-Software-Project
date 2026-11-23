@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "PrototypeScene.h"
 #include "CombatVisuals.h"
+#include "Quests.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -437,6 +438,154 @@ namespace prototype
                        C(player ? 0xF4B27A : 0xC9F9EF));
         }
 
+        Color QuestColor(echo::QuestTarget target)
+        {
+            switch (target)
+            {
+            case echo::QuestTarget::Sea:
+                return C(0xC5D86F);
+            case echo::QuestTarget::Mion:
+                return C(0xD7AF7F);
+            case echo::QuestTarget::Doyun:
+                return C(0x8BA8BC);
+            case echo::QuestTarget::Yunseo:
+                return C(0xCC9EC3);
+            case echo::QuestTarget::Ihyeon:
+                return C(0xABD0D7);
+            case echo::QuestTarget::Harin:
+                return C(0xB5CEB1);
+            default:
+                return C(0xE5CA91);
+            }
+        }
+
+        void QuestNpc(const echo::QuestAnchor& anchor)
+        {
+            const Vec2 p = Iso(anchor.x, anchor.y);
+            Character(anchor.x, anchor.y, QuestColor(anchor.target), false);
+
+            if (anchor.target == echo::QuestTarget::Mion)
+            {
+                draw->Circle(p.x - 10, p.y - 48, 4, C(0x665044));
+                Poly({Vec2(p.x - 7, p.y - 28),
+                      Vec2(p.x + 6, p.y - 28),
+                      Vec2(p.x + 8, p.y - 10),
+                      Vec2(p.x - 8, p.y - 10)},
+                     C(0xE8DCC4));
+                draw->Rect(p.x - 4, p.y - 21, 7, 5, C(0xC8B9A0));
+            }
+            else if (anchor.target == echo::QuestTarget::Doyun)
+            {
+                Ellipse(p.x - 1, p.y - 50, 10, 4, C(0x5D5E65));
+                draw->Rect(p.x + 5, p.y - 26, 9, 12, C(0xE5DDD1));
+                draw->Rect(p.x + 6, p.y - 25, 7, 7, C(0x8C9AA3));
+            }
+            else if (anchor.target == echo::QuestTarget::Yunseo)
+            {
+                draw->Line(Vec2(p.x - 9, p.y - 46), Vec2(p.x - 10, p.y - 28), 4, C(0x785B7D));
+                draw->Line(Vec2(p.x + 9, p.y - 46), Vec2(p.x + 11, p.y - 31), 4, C(0x785B7D));
+                draw->Line(Vec2(p.x - 8, p.y - 50), Vec2(p.x + 3, p.y - 52), 3, C(0x967697));
+                draw->Circle(p.x + 9, p.y - 42, 3, C(0xE2C195));
+            }
+            else if (anchor.target == echo::QuestTarget::Ihyeon)
+            {
+                draw->Line(Vec2(p.x - 7, p.y - 49), Vec2(p.x + 5, p.y - 52), 4, C(0x9AA9AF));
+                draw->Rect(p.x - 6, p.y - 44, 5, 3, C(0x314D60));
+                draw->Rect(p.x + 1, p.y - 44, 5, 3, C(0x314D60));
+                draw->Line(Vec2(p.x - 1, p.y - 43), Vec2(p.x + 1, p.y - 43), 1, C(0x314D60));
+                draw->Rect(p.x + 5, p.y - 26, 11, 14, C(0x314D60));
+                draw->Rect(p.x + 6, p.y - 25, 9, 10, C(0x8CB9BA));
+            }
+        }
+
+        void QuestObject(const echo::QuestAnchor& anchor)
+        {
+            const Vec2 p = Iso(anchor.x, anchor.y);
+            const Color color = QuestColor(anchor.target);
+
+            if (anchor.npc && anchor.target != echo::QuestTarget::Harin)
+            {
+                QuestNpc(anchor);
+            }
+            else if (anchor.target == echo::QuestTarget::Grove)
+            {
+                Ellipse(p.x, p.y + 1, 22, 9, C(0x3D6D5E, .5f));
+                draw->Line(Vec2(p.x, p.y), Vec2(p.x + 2, p.y - 32), 3, C(0x6F9C7E));
+                Ellipse(p.x - 7, p.y - 24, 10, 5, C(0x76AE8E));
+                Ellipse(p.x + 10, p.y - 32, 11, 6, C(0x9EC3A2));
+
+                if (game->quests.GroveDecorated())
+                {
+                    for (int index = 0; index < 5; ++index)
+                    {
+                        const float x = p.x - 17 + index * 8.0f;
+                        const float y = p.y - 7 - (index % 2) * 5.0f;
+                        draw->Circle(x, y, 4, C(0xDFC39F));
+                        draw->Circle(x, y, 1.5f, C(0xFFF0C3));
+                    }
+                }
+            }
+            else if (anchor.target == echo::QuestTarget::Trace)
+            {
+                Ring(p.x, p.y, 23, 9, 1, C(0x96D7CB, .55f));
+                draw->Circle(p.x, p.y - 19, 7, C(0xB8E9D4, .24f).Emissive(.5f));
+                draw->Circle(p.x, p.y - 19, 3, C(0xB8E9D4).Emissive(.8f));
+            }
+            else if (anchor.target == echo::QuestTarget::Photo)
+            {
+                Poly({Vec2(p.x - 10, p.y - 30),
+                      Vec2(p.x + 11, p.y - 27),
+                      Vec2(p.x + 9, p.y - 5),
+                      Vec2(p.x - 12, p.y - 8)},
+                     C(0xDDD5C7));
+                draw->Rect(p.x - 7, p.y - 26, 14, 13, C(0x718795));
+                draw->Circle(p.x - 3, p.y - 21, 2, C(0xB6C3BC));
+                draw->Circle(p.x + 3, p.y - 21, 2, C(0xB6C3BC));
+            }
+            else
+            {
+                Ellipse(p.x, p.y + 1, 21, 8, C(0x06121D, .5f));
+                draw->Line(p, Vec2(p.x, p.y - 22), 5, C(0x486275));
+                draw->RoundedRect(p.x - 19, p.y - 50, 38, 28, 3, C(0x304D60));
+                draw->Rect(p.x - 15, p.y - 46, 30, 19, C(0x142F40));
+                draw->Line(Vec2(p.x - 11, p.y - 39), Vec2(p.x + 10, p.y - 39), 1, color);
+                draw->Line(Vec2(p.x - 11, p.y - 34), Vec2(p.x + 5, p.y - 34), 1, color);
+
+                if (anchor.target == echo::QuestTarget::Harin)
+                {
+                    draw->Circle(p.x, p.y - 40, 5, C(0xC9C9B2));
+                    draw->RoundedRect(p.x - 7, p.y - 34, 14, 8, 3, C(0x8EAAA2));
+                }
+            }
+
+            const bool active = game->quests.Tracked().target == anchor.target;
+            const float labelY = p.y - (anchor.npc ? 78.0f : 65.0f);
+            std::wstring name = anchor.name;
+            if (anchor.target == echo::QuestTarget::Harin && !game->quests.LinksDisabled()
+                && !active)
+            {
+                const auto chapters = game->quests.Entries(0);
+                if (chapters.size() <= 4 || chapters[4].progress == 0)
+                {
+                    name = L"응답 없는 송신기";
+                }
+            }
+            const float nameWidth = static_cast<float>(name.size()) * 6.4f;
+            Label(p.x - nameWidth, labelY, name, 13, color, 600);
+
+            if (active)
+            {
+                Ring(p.x, p.y + 3, 20, 8, 1.5f, C(0xF3D493, .8f).Emissive(.3f));
+                draw->Circle(p.x, labelY - 15, 7, C(0xF0D18B));
+                Label(p.x - 2, labelY - 23, L"!", 12, C(0x273241), 700);
+            }
+
+            if (Distance(game->x, game->y, anchor.x, anchor.y) < 2.2)
+            {
+                Label(p.x - 26, p.y + 16, anchor.npc ? L"[E] 대화" : L"[E] 조사", 12, C(0xD7D6BD));
+            }
+        }
+
         void Building(int x, int y)
         {
             uint32_t seed = Hash(x, y, 5);
@@ -742,6 +891,19 @@ namespace prototype
                 objects.push_back({1.75, 11, -1.25, 3, 0});
                 objects.push_back({-1, 11, 3, -4, 0});
             }
+            const auto& anchors = echo::QuestAnchors();
+
+            for (size_t index = 0; index < anchors.size(); ++index)
+            {
+                const auto& anchor = anchors[index];
+
+                if (anchor.target != echo::QuestTarget::Sea && anchor.realm == game->realm
+                    && Distance(game->x, game->y, anchor.x, anchor.y) < 18)
+                {
+                    objects.push_back(
+                        {anchor.x + anchor.y, 14, anchor.x, anchor.y, static_cast<int>(index)});
+                }
+            }
             int cellX = int(std::floor(game->x / 8));
             int cellY = int(std::floor(game->y / 8));
             for (int x = cellX - 1; x <= cellX + 1; ++x)
@@ -814,6 +976,12 @@ namespace prototype
                 case 6:
                     SeaAvatar(p);
                     Label(p.x - 13, p.y - 78, L"세아", 14, C(0xE6D5EE));
+                    if (game->quests.Tracked().target == echo::QuestTarget::Sea)
+                    {
+                        Ring(p.x, p.y + 3, 20, 8, 1.5f, C(0xF0D18B, .8f));
+                        draw->Circle(p.x, p.y - 94, 7, C(0xF0D18B));
+                        Label(p.x - 2, p.y - 102, L"!", 12, C(0x273241), 700);
+                    }
                     if (Distance(game->x, game->y, 1, -1.3) < 2)
                     {
                         Label(p.x - 30, p.y + 15, L"[E] 대화", 12, C(0xD2C2DF));
@@ -832,6 +1000,11 @@ namespace prototype
                     Color color = e.protection >= e.aggression ? C(0x86DDD0) : C(0xDAA1B0);
                     Character(object.x, object.y, color, false, true, e.id);
                     Label(p.x - 27, p.y - 91, L"유실체 " + std::to_wstring(e.id), 13, color);
+                    if (game->quests.Tracked().target == echo::QuestTarget::Echo)
+                    {
+                        draw->Circle(p.x, p.y - 105, 7, C(0xF0D18B));
+                        Label(p.x - 2, p.y - 113, L"!", 12, C(0x273241), 700);
+                    }
                     if (Distance(game->x, game->y, e.x, e.y) < 2)
                     {
                         Label(p.x - 25, p.y + 18, L"[E] 교감", 12, color);
@@ -859,6 +1032,9 @@ namespace prototype
                 }
                 case 13:
                     combat_visuals::DrawDrop(*draw, game->combat.drops[object.id], p, view->time);
+                    break;
+                case 14:
+                    QuestObject(anchors[object.id]);
                     break;
                 }
             }
@@ -918,9 +1094,16 @@ namespace prototype
                 draw->Circle(float(x + 122 + (dx - dy) * 13), float(y + 88 + (dx + dy) * 6), 3, c);
             };
             marker(-2, .8, C(0xC9B4E2));
-            if (game->realm == 0)
+            for (const auto& anchor : echo::QuestAnchors())
             {
-                marker(1, -1.3, C(0xD8B48D));
+                if (anchor.realm == game->realm)
+                {
+                    marker(anchor.x,
+                           anchor.y,
+                           game->quests.Tracked().target == anchor.target
+                               ? C(0xF0D18B)
+                               : QuestColor(anchor.target));
+                }
             }
             if (game->realm == 1)
             {
@@ -949,6 +1132,203 @@ namespace prototype
             }
             draw->Circle(x + 122, y + 88, 4, C(0x9AEAD8));
             Label(x + 17, y + 126, L"미지의 구역은 계속 이어집니다", 11, C(0x718C9D));
+        }
+
+        void QuestText(float x,
+                       float y,
+                       const std::wstring& text,
+                       float size,
+                       Color color,
+                       double columns,
+                       size_t maximumLines,
+                       int weight = 400)
+        {
+            std::vector<std::wstring> lines;
+            std::wstring line;
+            double width = 0.0;
+
+            for (wchar_t character : text)
+            {
+                const double nextWidth = character < 0x100 ? .55 : 1.0;
+
+                if (character == L'\n' || (!line.empty() && width + nextWidth > columns))
+                {
+                    lines.push_back(line);
+                    line.clear();
+                    width = 0.0;
+                }
+
+                if (character != L'\n')
+                {
+                    line.push_back(character);
+                    width += nextWidth;
+                }
+            }
+
+            if (!line.empty())
+            {
+                lines.push_back(line);
+            }
+
+            for (size_t index = 0; index < std::min(lines.size(), maximumLines); ++index)
+            {
+                std::wstring visible = lines[index];
+
+                if (index + 1 == maximumLines && lines.size() > maximumLines)
+                {
+                    if (!visible.empty())
+                    {
+                        visible.pop_back();
+                    }
+                    visible += L"…";
+                }
+
+                Label(x, y + static_cast<float>(index) * (size + 7), visible, size, color, weight);
+            }
+        }
+
+        std::wstring QuestDestination(const echo::QuestEntry& entry)
+        {
+            if (entry.realm != game->realm && entry.target != echo::QuestTarget::None)
+            {
+                return entry.realm == 1 ? L"[TAB] 루미아에서 계속하기"
+                                        : L"[TAB] 현실 도시로 돌아가기";
+            }
+
+            for (const auto& anchor : echo::QuestAnchors())
+            {
+                if (anchor.target == entry.target)
+                {
+                    return anchor.name + L"  ·  거리 "
+                           + std::to_wstring(static_cast<int>(
+                               std::ceil(Distance(game->x, game->y, anchor.x, anchor.y))))
+                           + L"  ·  (" + std::to_wstring(static_cast<int>(anchor.x)) + L", "
+                           + std::to_wstring(static_cast<int>(anchor.y)) + L")";
+                }
+            }
+
+            if (entry.target == echo::QuestTarget::Echo && !game->echoes.empty())
+            {
+                float distance = 1.0e8f;
+
+                for (const auto& life : game->echoes)
+                {
+                    distance = std::min(distance, Distance(game->x, game->y, life.x, life.y));
+                }
+
+                return L"가까운 유실체  ·  거리 "
+                       + std::to_wstring(static_cast<int>(std::ceil(distance)));
+            }
+
+            return L"[K] 퀘스트에서 다음 여정 확인";
+        }
+
+        void QuestTracker()
+        {
+            const auto quest = game->quests.Tracked();
+            const Color accent = C(0xE8CB8D);
+            Panel(32, 156, 250, 194);
+            Label(50, 172, L"현재 여정", 12, accent, 600);
+            Label(223, 172, L"[K]", 12, C(0xB6C5C5));
+            QuestText(50, 197, quest.title, 17, C(0xE6ECE8), 12.0, 2, 600);
+            QuestText(50, 247, quest.objective, 12, C(0xB8C8CE), 17.5, 2);
+            QuestText(50, 294, QuestDestination(quest), 10, C(0xC8BFA6), 21.5, 2);
+            draw->Rect(50, 332, 212, 2, C(0x3A4C55));
+            const float fraction =
+                quest.required > 0
+                    ? std::clamp(static_cast<float>(quest.progress) / quest.required, 0.0f, 1.0f)
+                    : 0.0f;
+            draw->Rect(50, 332, 212 * fraction, 2, accent);
+        }
+
+        std::wstring QuestRewardText(const echo::QuestEntry& entry)
+        {
+            std::wstring result;
+
+            if (entry.rewardXP > 0)
+            {
+                result = L"경험 " + std::to_wstring(entry.rewardXP);
+            }
+
+            if (entry.rewardFragments > 0)
+            {
+                result += (result.empty() ? L"" : L" · ") + std::wstring(L"파편 ")
+                          + std::to_wstring(entry.rewardFragments);
+            }
+
+            if (entry.rewardCores > 0)
+            {
+                result += (result.empty() ? L"" : L" · ") + std::wstring(L"공명핵 ")
+                          + std::to_wstring(entry.rewardCores);
+            }
+
+            return result.empty() ? L"이야기와 관계의 기록" : result;
+        }
+
+        void QuestJournal()
+        {
+            const int tab = std::clamp(view->questTab, 0, 2);
+            const auto entries = game->quests.Entries(tab);
+            const auto tracked = game->quests.Tracked();
+            const wchar_t* tabs[] = {L"[1] 메인 퀘스트", L"[2] 서브 퀘스트", L"[3] 일일 퀘스트"};
+            const int today = echo::QuestState::CurrentDay();
+            const std::wstring date = std::to_wstring(today / 10000) + L"."
+                                      + std::to_wstring((today / 100) % 100) + L"."
+                                      + std::to_wstring(today % 100);
+            draw->Rect(0, 0, 1440, 900, C(0x020813, .74f));
+            Panel(230, 115, 980, 690, .99f);
+            Label(265, 140, L"우리의 여정을 따라", 28, C(0xE6EEE8), 600);
+            Label(265,
+                  182,
+                  tab == 2 ? date + L" · 한국 시간 매일 00:00에 일일 의뢰가 새로 시작됩니다."
+                           : L"현재 목표를 확인하고, 인물과 기록을 직접 찾아 이야기를 이어가세요.",
+                  13,
+                  C(0x93AEBB));
+
+            for (int index = 0; index < 3; ++index)
+            {
+                const float left = 265.0f + index * 305.0f;
+                draw->RoundedRect(left, 215, 285, 35, 6, C(index == tab ? 0x354E59 : 0x152D3D));
+                Label(left + 17, 223, tabs[index], 14, C(index == tab ? 0xEAD39E : 0x819EAC), 600);
+            }
+
+            for (size_t index = 0; index < std::min<size_t>(entries.size(), 5); ++index)
+            {
+                const auto& entry = entries[index];
+                const float top = 267.0f + static_cast<float>(index) * 88.0f;
+                const bool current = entry.title == tracked.title;
+                const Color accent =
+                    entry.claimable ? C(0xF1D496) : (entry.complete ? C(0x91CDB5) : C(0xCBD9DF));
+                draw->RoundedRect(265, top, 910, 80, 7, C(current ? 0x203C48 : 0x112838));
+                draw->Rect(265, top + 9, 3, 62, accent);
+                QuestText(280, top + 9, entry.title, 17, accent, 37, 1, 600);
+                const std::wstring status =
+                    entry.claimable
+                        ? L"보상 받기 가능"
+                        : (entry.complete ? L"완료"
+                                          : ((current || entry.progress > 0 || tab == 2)
+                                                 ? L"진행 중"
+                                                 : (tab == 0 ? L"다음 이야기" : L"미완료")));
+                Label(1031, top + 11, status, 12, accent, 600);
+                QuestText(280, top + 36, entry.objective, 13, C(0xADC2CC), 57.0, 1);
+                QuestText(280, top + 60, entry.detail, 10, C(0x6F91A3), 54.0, 1);
+                std::wstring progress =
+                    std::to_wstring(entry.progress) + L" / " + std::to_wstring(entry.required);
+                Label(1088, top + 38, progress, 11, C(0xC9BEA6));
+                QuestText(861, top + 60, QuestRewardText(entry), 10, C(0xBDAC8E), 29.0, 1);
+            }
+
+            Label(265,
+                  732,
+                  tab == 2 ? L"[F] 받을 수 있는 일일 보상 받기"
+                           : L"목표의 인물과 대화하거나 장소를 조사하면 진행과 보상이 기록됩니다.",
+                  13,
+                  C(0xC9B993));
+            Label(265,
+                  767,
+                  L"[1 / 2 / 3] 분류 선택     [K / ESC] 여정으로 돌아가기",
+                  13,
+                  C(0x93B5AE));
         }
 
         void Hud()
@@ -988,31 +1368,11 @@ namespace prototype
                   14,
                   accent,
                   600);
-            Label(1182, 64, L"[J] 기록   ·   [F1] 도움말", 10, C(0x8CA1B5));
-            Panel(32, 156, 250, 194);
-            Label(50, 172, L"지금, 우리의 이야기", 12, accent, 600);
-            Label(50, 200, lumia ? L"송신탑의 잔향" : L"방송이 끝난 뒤에도", 20, C(0xE4EBEE), 600);
-            Label(50,
-                  237,
-                  lumia ? (game->combat.growth.bosses > 0 ? L"송신자의 기록을 회수했습니다."
-                                                          : L"잡음 편린을 정리하고")
-                        : L"세아와 이야기를 나누고",
-                  13,
-                  C(0xA5B8C7));
-            Label(50,
-                  260,
-                  lumia ? (game->combat.growth.bosses > 0 ? L"다음 구역의 잔향을 찾아보세요."
-                                                          : L"파편으로 잔향탄을 조율하세요.")
-                        : L"화면 너머의 세계를 찾아보세요.",
-                  13,
-                  C(0xA5B8C7));
-            draw->Rect(50, 293, 212, 1, C(0x7890A3, .2f));
-            draw->Circle(54, 319, 3, accent);
-            Label(66,
-                  309,
-                  lumia ? L"사거리 안의 적을 자동 공격" : L"[E] 대화와 기록 조사",
-                  12,
-                  C(0xD3DDE0));
+            Label(1182, 64, L"[K] 퀘스트  [J] 기록  [F1] 도움말", 10, C(0x8CA1B5));
+            if (!view->dialogueOpen && !view->journalOpen && !view->helpOpen && !view->questsOpen)
+            {
+                QuestTracker();
+            }
             Panel(32, 673, 250, 133);
             Label(50, 688, L"내가 남기는 것", 13, C(0xB7C7D1), 600);
             Label(50, 716, game->ProfileName(), 18, accent, 600);
@@ -1074,7 +1434,7 @@ namespace prototype
             Label(1178, 839, coords.str(), 16, C(0xA8B9C5));
             Label(1178, 864, L"[F5] 저장   [ESC] 닫기", 11, C(0x718B9C));
             if (!game->message.empty() && !view->dialogueOpen && !view->journalOpen
-                && !view->helpOpen)
+                && !view->helpOpen && !view->questsOpen)
             {
                 Panel(350, 741, 775, 51, .94f);
                 Label(370, 755, game->message, 13, C(0xCCDFDD));
@@ -1086,6 +1446,11 @@ namespace prototype
             if (view->deathFlash > 0)
             {
                 draw->Rect(0, 0, 1440, 900, C(0x9BE8DD, view->deathFlash * .18f));
+            }
+            if (view->questsOpen)
+            {
+                QuestJournal();
+                return;
             }
             if (view->dialogueOpen)
             {
@@ -1139,7 +1504,7 @@ namespace prototype
                       C(0xAEC7CE));
                 Label(420,
                       490,
-                      view->helpOpen ? L"B 방송   J 기록   4 / 5 / 6 공명 강화"
+                      view->helpOpen ? L"B 방송   K 퀘스트   J 기록   4 / 5 / 6 공명 강화"
                                      : L"“네가 가고 싶은 곳부터 가자.”",
                       16,
                       C(0xAEC7CE));

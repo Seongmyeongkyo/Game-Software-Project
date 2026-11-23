@@ -169,6 +169,7 @@
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="PostProcess.h" />
     <ClInclude Include="GameState.h" />
+    <ClInclude Include="Quests.h" />
     <ClInclude Include="Combat.h" />
     <ClInclude Include="CombatVisuals.h" />
     <ClInclude Include="PrototypeScene.h" />
@@ -180,6 +181,7 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="PostProcess.cpp" />
     <ClCompile Include="GameState.cpp" />
+    <ClCompile Include="Quests.cpp" />
     <ClCompile Include="Combat.cpp" />
     <ClCompile Include="CombatVisuals.cpp" />
     <ClCompile Include="PrototypeScene.cpp" />
